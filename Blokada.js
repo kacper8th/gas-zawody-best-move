@@ -126,7 +126,9 @@ function restoreAthletesFromLock() {
 
   const summary = [];
   plans.forEach(function (p) {
-    p.sheet.getRange(LIST.firstRow, 2, p.plan.rows.length, p.plan.rows[0].length).setValues(p.plan.rows);
+    const range = p.sheet.getRange(LIST.firstRow, 2, p.plan.rows.length, p.plan.rows[0].length);
+    range.setValues(p.plan.rows);
+    range.setBackground(null); // stare podświetlenia walidacji nie pasują już do wierszy
     p.plan.notes.forEach(function (n) { summary.push(p.category + ': ' + n); });
   });
   rebuildResults();
