@@ -126,6 +126,7 @@ function buildMenus_() {
     .addItem('Drukuj regulamin (PDF)', 'printRules')
     .addItem('Drukuj listę zawodników (PDF)', 'printAthletes')
     .addItem('Drukuj wyniki (PDF)', 'printResults')
+    .addItem('Drukuj wyniki szczegółowe (PDF)', 'printDetails')
     .addToUi();
 }
 
