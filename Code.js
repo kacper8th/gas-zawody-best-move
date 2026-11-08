@@ -235,7 +235,7 @@ function findListSheet_(ss, category) {
 function onEdit(e) {
   if (!e || !e.range) return;
   const sh = e.range.getSheet();
-  if (sh.getName() === SHEET_RESULTS) return;
+  if (sh.getName() === SHEET_RESULTS || sh.getName() === SHEET_DETAILS) return;
   const isList = !!getListMeta_(sh);
   const isConfig = sh.getName() === SHEET_CONFIG;
   if (!isConfig && !isList) return;
@@ -280,10 +280,12 @@ function onEdit(e) {
 
 /** Ostrzeżenie w Wynikach, że dane zmieniły się od ostatniego przeliczenia. */
 function markResultsStale_(ss) {
-  const res = ss.getSheetByName(SHEET_RESULTS);
-  if (!res) return;
-  res.getRange(2, 1).setValue('⚠ Wyniki nieaktualne - dane zmieniły się od ostatniego przeliczenia. 🏋️ Zawody → Przelicz wyniki')
-    .setFontColor('#c00000').setFontStyle('normal').setFontWeight('bold');
+  [SHEET_RESULTS, SHEET_DETAILS].forEach(function (name) {
+    const res = ss.getSheetByName(name);
+    if (!res) return;
+    res.getRange(2, 1).setValue('⚠ Wyniki nieaktualne - dane zmieniły się od ostatniego przeliczenia. 🏋️ Zawody → Przelicz wyniki')
+      .setFontColor('#c00000').setFontStyle('normal').setFontWeight('bold');
+  });
 }
 
 function rebuildResults() {
@@ -320,9 +322,11 @@ function rebuildResultsUnlocked_() {
     fmt.push({ row: rows.length, kind: 'info' });
   }
 
+  const collected = []; // do zakładki „Wyniki szczegółowe”
   lists.forEach(function (x) {
     const meta = x.meta;
     const res = categoryResult_(cfg, x.sheet, meta);
+    collected.push({ meta: meta, res: res });
 
     rows.push(['']);
     rows.push([meta.category]);
@@ -426,6 +430,8 @@ function rebuildResultsUnlocked_() {
       }
     }
   });
+
+  buildDetailsSheet_(ss, cfg, collected, scoreFmt);
 }
 
 /** Czyta zawodników z listy startowej (pomija puste wiersze). */
@@ -463,6 +469,7 @@ function readAthletes_(sheet, meta) {
       name: (first + ' ' + last).trim(),
       bw: toNum_(r[LIST.weightCol - 1]),
       tiePlace: toNum_(r[meta.tieCol - 1]),
+      rawAttempts: meta.comps.map(function (c) { return readAttempts_(r, c, meta); }),
       attempts: meta.comps.map(function (c) {
         return readAttempts_(r, c, meta)
           .filter(function (a) { return a.ok && a.kg !== null; })
@@ -673,7 +680,7 @@ function computeRanking_(athletes, refs, coef, decimals) {
       const score = best !== null && a.bw ? round_(best / Math.pow(a.bw, coef) * factors[i], decimals) : null;
       comps.push({ best: best, score: score, place: null });
     }
-    return { nr: a.nr, name: a.name, bw: a.bw, tiePlace: a.tiePlace, comps: comps, notes: notes };
+    return { nr: a.nr, name: a.name, bw: a.bw, tiePlace: a.tiePlace, comps: comps, notes: notes, raw: a.rawAttempts || [] };
   });
 
   // Miejsca w konkurencjach: większy wynik = lepiej; brak wyniku = na końcu.
