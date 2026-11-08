@@ -260,7 +260,10 @@ function onEdit(e) {
   // Ręczna zmiana w kolumnie Nr - przywróć automatyczną numerację.
   if (isList && e.range.getColumn() <= LIST.nrCol && e.range.getLastRow() >= LIST.firstRow) {
     setNumberingFormula_(sh);
-    sh.getParent().toast('Nr jest liczony automatycznie - nie można go zmieniać.', '🏋️ Zawody');
+    // Usunięcie/wstawienie całego wiersza też tu trafia - wtedy bez komunikatu.
+    if (e.range.getNumColumns() < sh.getMaxColumns()) {
+      sh.getParent().toast('Nr jest liczony automatycznie - nie można go zmieniać.', '🏋️ Zawody');
+    }
   }
 
   // Automatyczne przeliczanie wyłączone - tylko oznacz Wyniki jako nieaktualne (szybkie).
@@ -367,7 +370,7 @@ function rebuildResultsUnlocked_() {
     fmt.push({ row: groupRowNo, kind: 'separators', count: rows.length - groupRowNo + 1, blocks: blocks, width: header.length });
 
     res.unresolved.forEach(function (u) {
-      rows.push(['', '⚠ Remis na miejscu ' + u.place + ': ' + u.names.join(', ') + ' - zaznacz zwycięzcę dogrywki na liście startowej.']);
+      rows.push(['', '⚠ Remis na miejscu ' + u.place + ': ' + u.names.join(', ') + ' - uzupełnij „Dogrywka - miejsce” na liście startowej.']);
       fmt.push({ row: rows.length, kind: 'warn' });
     });
   });

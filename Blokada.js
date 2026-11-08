@@ -11,6 +11,20 @@ function athleteKey_(first, last) {
   return (String(first) + ' ' + String(last)).toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * Klucze z numerem wystąpienia: ten sam zawodnik wpisany dwa razy to „ala kot#1” i „ala kot#2”,
+ * żeby duplikaty nie myliły dopasowania. Pusty wiersz = ''.
+ */
+function occurrenceKeys_(rows) {
+  const seen = {};
+  return rows.map(function (r) {
+    const k = athleteKey_(r[0], r[1]);
+    if (!k) return '';
+    seen[k] = (seen[k] || 0) + 1;
+    return k + '#' + seen[k];
+  });
+}
+
 /** Wzorzec listy z właściwości dokumentu albo null. */
 function readAthletesSnapshot_(sheet) {
   const raw = PropertiesService.getDocumentProperties().getProperty(athletesSnapKey_(sheet));
@@ -24,8 +38,9 @@ function readAthletesSnapshot_(sheet) {
 function lockDiff_(snapCells, curRows) {
   const label = function (r) { return (String(r[0]).trim() + ' ' + String(r[1]).trim()).trim(); };
   const snap = [], cur = [];
-  snapCells.forEach(function (r, i) { const k = athleteKey_(r[0], r[1]); if (k) snap.push({ key: k, pos: i, row: r }); });
-  curRows.forEach(function (r, i) { const k = athleteKey_(r[0], r[1]); if (k) cur.push({ key: k, pos: i, row: r }); });
+  const snapKeys = occurrenceKeys_(snapCells), curKeys = occurrenceKeys_(curRows);
+  snapCells.forEach(function (r, i) { if (snapKeys[i]) snap.push({ key: snapKeys[i], pos: i, row: r }); });
+  curRows.forEach(function (r, i) { if (curKeys[i]) cur.push({ key: curKeys[i], pos: i, row: r }); });
 
   const curByKey = {};
   cur.forEach(function (c) { if (!curByKey[c.key]) curByKey[c.key] = c; });
@@ -130,14 +145,12 @@ function planRestore_(snapCells, full, maxRows) {
   const blank = function () { return new Array(width).fill(''); };
   const used = {};
   const byKey = {};
-  full.forEach(function (r, i) {
-    const k = athleteKey_(r[0], r[1]);
-    if (k && byKey[k] === undefined) byKey[k] = i;
-  });
+  occurrenceKeys_(full).forEach(function (k, i) { if (k) byKey[k] = i; });
+  const snapKeys = occurrenceKeys_(snapCells);
 
   const rows = [], notes = [];
-  snapCells.forEach(function (s) {
-    const k = athleteKey_(s[0], s[1]);
+  snapCells.forEach(function (s, si) {
+    const k = snapKeys[si];
     if (!k) { rows.push(blank()); return; }
     const i = byKey[k];
     if (i === undefined) {
