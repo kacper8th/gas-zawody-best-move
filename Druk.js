@@ -12,13 +12,12 @@ function printResults() {
   const rank = function (x) { const i = order.indexOf(x.meta.category); return i < 0 ? 999 : i; };
   const lists = getListSheets_(ss).sort(function (a, b) { return rank(a) - rank(b); });
 
-  // Wyniki + szybka kontrola przed drukiem.
-  let problems = 0;
+  // Wyniki + kontrola przed drukiem (reguły z tabeli walidacji w konfiguracji).
+  const v = collectValidation_(ss, cfg);
+  const problems = v.errors.length + v.warnings.length;
   const sections = [];
   lists.forEach(function (x) {
     const res = categoryResult_(cfg, x.sheet, x.meta);
-    const values = x.sheet.getRange(LIST.firstRow, 1, LIST.maxRows, x.meta.tieCol).getValues();
-    problems += validateList_(values, x.meta, cfg).errors.length + res.unresolved.length;
     if (!res.rows.length) return;
     sections.push({
       category: x.meta.category,
@@ -35,8 +34,7 @@ function printResults() {
 
   if (problems) {
     const ans = ui.alert('Drukuj wyniki',
-      'Walidacja znalazła ' + problems + ' problem(ów) (błędy wpisów lub nierozstrzygnięte remisy).\n' +
-      'Szczegóły: 🏋️ Zawody → ✅ Walidacja zawodów.\n\nDrukować mimo to?', ui.ButtonSet.YES_NO);
+      'Walidacja znalazła problemy:\n\n' + validationReport_(v) + '\n\nDrukować mimo to?', ui.ButtonSet.YES_NO);
     if (ans !== ui.Button.YES) return;
   }
 

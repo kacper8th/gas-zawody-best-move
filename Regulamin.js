@@ -16,7 +16,7 @@ REGULAMIN
 II Charytatywne Zawody Mikołajkowe Kettlebell Hardstyle – Best Move
 1. CEL ZAWODÓW
 Zawody mają charakter charytatywny. Całość wpisowego zostanie przekazana na leczenie i rehabilitację Hugona Szatrowskiego.
-https://www.fundacjaavalon.pl/nas.../hugon_szatrowski_19577/
+https://www.fundacjaavalon.pl/nasi_beneficjenci/hugon_szatrowski_19577/
 Celem wydarzenia jest również promowanie Kettlebell Hardstyle, zdrowej rywalizacji i wspólnego pomagania.
 2. DATA I MIEJSCE
 6 grudnia 2026 r. (niedziela)
@@ -83,7 +83,7 @@ DODATKOWE ZASADY:
 8. WPISOWE I ZAPISY
 Wpisowe wynosi minimum 100 zł.
 Całość wpłaty trafia bezpośrednio na zbiórkę Hugona Szatrowskiego:
-https://www.fundacjaavalon.pl/nas.../hugon_szatrowski_19577/
+https://www.fundacjaavalon.pl/nasi_beneficjenci/hugon_szatrowski_19577/
 Aby zapisać się na zawody, należy:
 1. Wpłacić cegiełkę w wysokości minimum 100 zł na zbiórkę Hugona.
 2. Przesłać organizatorowi przez Messenger wiadomość zawierającą imię, nazwisko oraz potwierdzenie wpłaty.

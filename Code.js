@@ -184,10 +184,44 @@ function getListMeta_(sh) {
   try { return JSON.parse(md.getValue()); } catch (e) { return null; }
 }
 
-function getListSheets_(ss) {
+/** Wszystkie zakładki z oznaczeniem listy (także ręczne kopie). Przy okazji uzupełnia usunięte wiersze. */
+function getAllListSheets_(ss) {
   return ss.getSheets()
     .map(function (sh) { return { sheet: sh, meta: getListMeta_(sh) }; })
-    .filter(function (x) { return x.meta; });
+    .filter(function (x) { return x.meta; })
+    .map(function (x) { ensureListRows_(x.sheet); return x; });
+}
+
+/** Listy startowe - po jednej na kategorię. Kopia zakładki (Duplikuj) jest pomijana. */
+function getListSheets_(ss) {
+  return splitListSheets_(getAllListSheets_(ss)).main;
+}
+
+/** Ręczne kopie list (ta sama kategoria na drugiej zakładce). */
+function getDuplicateListSheets_(ss) {
+  return splitListSheets_(getAllListSheets_(ss)).duplicates;
+}
+
+/** Na kategorię zostaje zakładka o nazwie „Lista - <kategoria>”, a gdy jej nie ma - pierwsza z kolei. */
+function splitListSheets_(all) {
+  const byCat = {};
+  all.forEach(function (x) { (byCat[x.meta.category] = byCat[x.meta.category] || []).push(x); });
+  const main = [], duplicates = [];
+  all.forEach(function (x) {
+    const group = byCat[x.meta.category];
+    const preferred = group.filter(function (g) { return g.sheet.getName() === listSheetName_(x.meta.category); })[0] || group[0];
+    (x === preferred ? main : duplicates).push(x);
+  });
+  return { main: main, duplicates: duplicates };
+}
+
+/** Usunięty wiersz listy: dokłada wiersze na końcu i odtwarza numerację, żeby układ się nie rozjechał. */
+function ensureListRows_(sh) {
+  const need = LIST.firstRow + LIST.maxRows - 1;
+  const have = sh.getMaxRows();
+  if (have >= need) return;
+  sh.insertRowsAfter(have, need - have);
+  setNumberingFormula_(sh);
 }
 
 function findListSheet_(ss, category) {
@@ -419,79 +453,147 @@ function readAthletes_(sheet, meta) {
 // ───────────────────────────── Walidacja ─────────────────────────────
 
 /**
- * Sprawdza listy startowe: brak wagi, puste próby, próba lżejsza od poprzedniej, zaliczona bez ciężaru,
- * nierozstrzygnięte remisy na podium. Błędne komórki podświetla na czerwono.
+ * Sprawdza zawody wg reguł z tabeli „Walidacja zawodów” w konfiguracji i podświetla błędne komórki na czerwono.
  */
 function validateCompetition() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const ui = SpreadsheetApp.getUi();
   const cfg = readConfig_(ss);
-  const lists = getListSheets_(ss);
-  const errors = [], warnings = [];
+  const v = collectValidation_(ss, cfg);
   const BAD = '#f4cccc';
 
-  if (!lists.length) {
-    ui.alert('Walidacja zawodów', 'Brak list startowych.', ui.ButtonSet.OK);
-    return;
-  }
-
-  lists.forEach(function (x) {
+  // Czyszczenie starych podświetleń (dane zawodnika + próby) i nowe podświetlenia.
+  v.lists.forEach(function (x) {
     const sh = x.sheet, meta = x.meta;
-    const res = validateList_(sh.getRange(LIST.firstRow, 1, LIST.maxRows, meta.tieCol).getValues(), meta, cfg);
-
-    // Czyszczenie starych podświetleń (waga + próby) i nowe podświetlenia.
     sh.getRange(LIST.firstRow, 2, LIST.maxRows, LIST.fixedCols - 1).setBackground(null);
     meta.comps.forEach(function (c) {
       sh.getRange(LIST.firstRow, c.col, LIST.maxRows, meta.layout === 2 ? 2 * c.attempts : c.attempts).setBackground(null);
     });
-    res.cells.forEach(function (rc) { sh.getRange(rc[0], rc[1]).setBackground(BAD); });
-
-    res.errors.forEach(function (m) { errors.push(meta.category + ': ' + m); });
-    categoryResult_(cfg, sh, meta).unresolved.forEach(function (u) {
-      warnings.push(meta.category + ': nierozstrzygnięty remis na miejscu ' + u.place + ' (' + u.names.join(', ') + ') - uzupełnij dogrywkę');
-    });
+    (v.cells[sh.getSheetId()] || []).forEach(function (rc) { sh.getRange(rc[0], rc[1]).setBackground(BAD); });
   });
 
-  if (!errors.length && !warnings.length) {
+  if (!v.errors.length && !v.warnings.length) {
     ui.alert('Walidacja zawodów', '✅ Wszystko poprawne - brak błędów.', ui.ButtonSet.OK);
     return;
   }
-  const MAX = 30;
-  const lines = [];
-  if (errors.length) {
-    lines.push('❌ Błędy (' + errors.length + '):');
-    errors.slice(0, MAX).forEach(function (m) { lines.push('• ' + m); });
-    if (errors.length > MAX) lines.push('… i ' + (errors.length - MAX) + ' więcej (podświetlone na czerwono na listach).');
-  }
-  if (warnings.length) {
-    if (lines.length) lines.push('');
-    lines.push('⚠ Remisy na podium (' + warnings.length + '):');
-    warnings.forEach(function (m) { lines.push('• ' + m); });
-  }
-  ui.alert('Walidacja zawodów', lines.join('\n'), ui.ButtonSet.OK);
+  ui.alert('Walidacja zawodów', validationReport_(v), ui.ButtonSet.OK);
 }
 
-/** Czysta walidacja wierszy listy. Zwraca { errors: [tekst], cells: [[wiersz, kolumna]] }. */
+/** Tekst raportu walidacji (błędy + ostrzeżenia, z limitem długości). */
+function validationReport_(v) {
+  const MAX = 30;
+  const lines = [];
+  if (v.errors.length) {
+    lines.push('❌ Błędy (' + v.errors.length + '):');
+    v.errors.slice(0, MAX).forEach(function (m) { lines.push('• ' + m); });
+    if (v.errors.length > MAX) lines.push('… i ' + (v.errors.length - MAX) + ' więcej (podświetlone na czerwono na listach).');
+  }
+  if (v.warnings.length) {
+    if (lines.length) lines.push('');
+    lines.push('⚠ Ostrzeżenia (' + v.warnings.length + '):');
+    v.warnings.slice(0, MAX).forEach(function (m) { lines.push('• ' + m); });
+  }
+  return lines.join('\n');
+}
+
+/** Zbiera wszystkie problemy zawodów: { lists, errors, warnings, cells: { sheetId: [[wiersz, kolumna]] } }. */
+function collectValidation_(ss, cfg) {
+  const opt = cfg.validation;
+  const on = function (key) { return !opt || !opt[key] || opt[key].on; };
+  const lists = getListSheets_(ss);
+  const errors = [], warnings = [], cells = {};
+
+  if (on('CONFIG')) {
+    cfg.configIssues.forEach(function (m) { warnings.push('Konfiguracja: ' + m); });
+    getDuplicateListSheets_(ss).forEach(function (x) {
+      errors.push('Zakładka „' + x.sheet.getName() + '” to kopia listy „' + x.meta.category + '” - jest pomijana, usuń ją');
+    });
+  }
+  if (!lists.length) warnings.push('Brak list startowych - ⚙️ Setup → Generuj listy startowe');
+
+  const counts = { total: 0, adult: 0, junior: 0 };
+  lists.forEach(function (x) {
+    const sh = x.sheet, meta = x.meta;
+    const cfgCat = cfg.categories.filter(function (c) { return c.name === meta.category; })[0];
+
+    if (on('CONFIG')) {
+      listConfigIssues_(meta, cfgCat).forEach(function (m) { errors.push(meta.category + ': ' + m); });
+    }
+
+    const values = sh.getRange(LIST.firstRow, 1, LIST.maxRows, meta.tieCol).getValues();
+    const res = validateList_(values, meta, cfg);
+    res.errors.forEach(function (m) { errors.push(meta.category + ': ' + m); });
+    cells[sh.getSheetId()] = res.cells;
+
+    const n = res.athletes;
+    counts.total += n;
+    if (cfgCat && cfgCat.junior) counts.junior += n; else counts.adult += n;
+
+    if (on('TIES')) {
+      categoryResult_(cfg, sh, meta).unresolved.forEach(function (u) {
+        warnings.push(meta.category + ': nierozstrzygnięty remis na miejscu ' + u.place + ' (' + u.names.join(', ') + ') - uzupełnij dogrywkę');
+      });
+    }
+  });
+
+  limitIssues_(counts, opt).forEach(function (m) { errors.push(m); });
+  return { lists: lists, errors: errors, warnings: warnings, cells: cells };
+}
+
+/** Czysta funkcja: limity zawodników. counts = { total, adult, junior }. */
+function limitIssues_(counts, opt) {
+  const out = [];
+  [['LIMIT_TOTAL', 'total', 'łącznie'], ['LIMIT_ADULT', 'adult', 'dorosłych'], ['LIMIT_JUNIOR', 'junior', 'juniorów']]
+    .forEach(function (l) {
+      const o = opt && opt[l[0]];
+      if (!o || !o.on || o.value === null) return;
+      if (counts[l[1]] > o.value) out.push('Przekroczony limit zawodników ' + l[2] + ': ' + counts[l[1]] + ' / ' + o.value);
+    });
+  return out;
+}
+
+/** Czysta funkcja: zgodność listy z bieżącą konfiguracją kategorii. */
+function listConfigIssues_(meta, cfgCat) {
+  if (!cfgCat) {
+    return ['kategorii nie ma w konfiguracji (zmieniona nazwa lub usunięta) - wyniki liczone ze współczynnikiem i referencjami z chwili utworzenia listy'];
+  }
+  const out = [];
+  const listKeys = meta.comps.map(function (c) { return c.key + ':' + c.attempts; }).join(',');
+  const cfgKeys = cfgCat.comps.map(function (c) { return c.key + ':' + c.attempts; }).join(',');
+  if (listKeys !== cfgKeys) {
+    out.push('konkurencje lub ilość prób na liście różnią się od konfiguracji - usuń listę i wygeneruj ją ponownie');
+  }
+  if (meta.layout !== 2) out.push('stary układ listy (bez „Zal.”) - usuń listę i wygeneruj ją ponownie');
+  return out;
+}
+
+/** Czysta walidacja wierszy listy wg reguł. Zwraca { errors, cells: [[wiersz, kolumna]], athletes }. */
 function validateList_(values, meta, cfg) {
+  const opt = cfg && cfg.validation;
+  const on = function (key) { return !opt || !opt[key] || opt[key].on; };
   const errors = [], cells = [];
   const seen = {}; // imię + nazwisko -> pierwszy wiersz
+  let athletes = 0;
   values.forEach(function (r, k) {
     const first = String(r[1]).trim();
     const last = String(r[2]).trim();
     if (!first && !last) return;
+    athletes++;
     const row = LIST.firstRow + k;
     const who = 'nr ' + r[0] + ' ' + (first + ' ' + last).trim();
 
     // Ten sam zawodnik (imię + nazwisko) dwa razy w kategorii.
     const key = (first + ' ' + last).toLowerCase().replace(/\s+/g, ' ').trim();
     if (seen[key]) {
-      errors.push(who + ' - powtórzony zawodnik (taki sam jak nr ' + seen[key].nr + ')');
-      cells.push([row, 2], [row, 3], [seen[key].row, 2], [seen[key].row, 3]);
+      if (on('DUPLICATE')) {
+        errors.push(who + ' - powtórzony zawodnik (taki sam jak nr ' + seen[key].nr + ')');
+        cells.push([row, 2], [row, 3], [seen[key].row, 2], [seen[key].row, 3]);
+      }
     } else {
       seen[key] = { nr: r[0], row: row };
     }
 
-    if (toNum_(r[LIST.weightCol - 1]) === null) {
+    if (on('WEIGHT') && toNum_(r[LIST.weightCol - 1]) === null) {
       errors.push(who + ' - brak wagi');
       cells.push([row, LIST.weightCol]);
     }
@@ -501,11 +603,13 @@ function validateList_(values, meta, cfg) {
       let prev = null, prevNo = 0;
       readAttempts_(r, c, meta).forEach(function (a, i) {
         if (a.kg === null) {
-          errors.push(who + ' - ' + short + ': brak próby ' + (i + 1));
-          cells.push([row, a.col]);
+          if (on('ATTEMPTS')) {
+            errors.push(who + ' - ' + short + ': brak próby ' + (i + 1));
+            cells.push([row, a.col]);
+          }
           return;
         }
-        if (prev !== null && a.kg < prev) {
+        if (on('ORDER') && prev !== null && a.kg < prev) {
           errors.push(who + ' - ' + short + ': próba ' + (i + 1) + ' (' + a.kg + ' kg) lżejsza niż próba ' + prevNo + ' (' + prev + ' kg)');
           cells.push([row, a.col]);
         }
@@ -514,7 +618,7 @@ function validateList_(values, meta, cfg) {
       });
     });
   });
-  return { errors: errors, cells: cells };
+  return { errors: errors, cells: cells, athletes: athletes };
 }
 
 /**
@@ -688,8 +792,7 @@ function athletesArea_() {
 
 /** Cała część zakładki Konfiguracja z ustawieniami i tabelami. */
 function configArea_() {
-  const n = COMPETITIONS.length;
-  return { row: 1, col: 1, rows: CFG.refFirstRow + CFG.maxRows, cols: Math.max(2 + 2 * n, 1 + 2 * n, CFG.compShortCol) };
+  return { row: 1, col: 1, rows: CFG.valFirstRow + VALIDATION_RULES.length, cols: Math.max(cfgCatCols_(), cfgRefCols_(), CFG.compShortCol) };
 }
 
 /** Zapisuje wartości (formuły jako tekst formuły) obszaru do właściwości dokumentu. */
