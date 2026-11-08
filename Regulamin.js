@@ -165,6 +165,7 @@ function buildRulesSheet_(ss) {
   sh.setColumnWidth(1, 120);
   sh.setColumnWidth(2, 820);
   sh.setFrozenRows(RULES.headerRow);
+  protectRulesStatic_(sh);
   return sh;
 }
 

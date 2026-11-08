@@ -136,6 +136,7 @@ function setupTemplate() {
   if (!ss.getSheetByName(SHEET_CONFIG)) buildConfigSheet_(ss);
   else upgradeConfigSheet_(ss.getSheetByName(SHEET_CONFIG)); // dopisanie nowych ustawień do istniejącej konfiguracji
   if (!ss.getSheetByName(SHEET_RESULTS)) createResultsSheet_(ss);
+  applyStaticProtections_(ss); // ochrona nagłówków, etykiet i opisów (także w istniejących zakładkach)
   rebuildResults();
 
   // Domyślna pusta zakładka nowego arkusza - usuwana tylko, gdy naprawdę pusta.
