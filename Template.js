@@ -23,26 +23,40 @@ const CFG = {
   decimalsCell: 'B4',
   lockConfigCell: 'B5',
   lockAthletesCell: 'B6',
+  // Tabela kategorii: Kategoria, Współczynnik, potem dla każdej konkurencji: czy jest, ilość prób.
   headerRow: 8,
   firstRow: 9,
-  maxRows: 20,
-  perComp: 4, // dla każdej konkurencji: czy jest, ilość prób, waga ref., ciężar ref.
+  maxRows: 8, // maksymalnie 8 kategorii
+  // Tabela zawodnika referencyjnego (wiersze = te same kategorie): dla każdej konkurencji waga ref., ciężar ref.
+  refTitleRow: 19,
+  refHeaderRow: 20,
+  refFirstRow: 21,
 };
 
-/** Kolumna (1-based) w tabeli kategorii: konkurencja i (0-based), pole offset 0-3. */
+/** Kolumna (1-based) w tabeli kategorii: konkurencja i (0-based), 0 = czy jest, 1 = ilość prób. */
 function cfgCompCol_(i, offset) {
-  return 3 + CFG.perComp * i + offset;
+  return 3 + 2 * i + offset;
 }
 
-/**
- * Kategoria, współczynnik, potem dla każdej konkurencji:
- * [czy jest, ilość prób, waga zawodnika ref. [kg], ciężar zawodnika ref. [kg]].
- */
+/** Kolumna (1-based) w tabeli referencji: konkurencja i (0-based), 0 = waga ref., 1 = ciężar ref. */
+function cfgRefCol_(i, offset) {
+  return 2 + 2 * i + offset;
+}
+
+/** Kategoria, współczynnik, potem dla każdej konkurencji: [czy jest, ilość prób]. */
 const DEFAULT_CATEGORIES = [
-  ['Kobiety', 0.60, true, 3, 65, 36, true, 3, 65, 48],
-  ['Mężczyźni', 0.67, true, 3, 85, 60, true, 3, 85, 80],
-  ['Juniorzy - chłopcy', 0.67, false, 3, 85, 60, true, 3, 85, 80],
-  ['Juniorzy - dziewczęta', 0.60, false, 3, 65, 36, true, 3, 65, 48],
+  ['Kobiety', 0.60, true, 3, true, 3],
+  ['Mężczyźni', 0.67, true, 3, true, 3],
+  ['Juniorzy - chłopcy', 0.67, false, 3, true, 3],
+  ['Juniorzy - dziewczęta', 0.60, false, 3, true, 3],
+];
+
+/** Zawodnik referencyjny (te same wiersze co kategorie): Press [waga, ciężar], TGU [waga, ciężar]. */
+const DEFAULT_REFS = [
+  [65, 36, 65, 48],
+  [85, 60, 85, 80],
+  [85, 60, 85, 80],
+  [65, 36, 65, 48],
 ];
 
 const DEFAULT_DECIMALS = 3;
@@ -80,7 +94,11 @@ function setupTemplate() {
 
 function buildConfigSheet_(ss) {
   const sh = ss.insertSheet(SHEET_CONFIG, 0);
-  const nCols = 2 + CFG.perComp * COMPETITIONS.length;
+  const nCols = 2 + 2 * COMPETITIONS.length;
+  const nRefCols = 1 + 2 * COMPETITIONS.length;
+  const note = function (row, text) {
+    sh.getRange(row, 1).setValue(text).setFontColor('#666666').setFontStyle('italic');
+  };
 
   sh.getRange('A1').setValue('Konfiguracja zawodów').setFontSize(14).setFontWeight('bold');
 
@@ -99,10 +117,9 @@ function buildConfigSheet_(ss) {
       .setHelpText('Liczba całkowita 0-6').build());
   sh.getRange('B5:B6').setValues([[lockLabel_(false)], [lockLabel_(false)]]).setFontColor('#666666');
 
+  // Tabela kategorii
   const headers = ['Kategoria', 'Współczynnik (0-1)'];
-  COMPETITIONS.forEach(function (c) {
-    headers.push(c.name, 'Próby - ' + c.short, c.short + ' - waga zawodnika ref. [kg]', c.short + ' - ciężar ref. [kg]');
-  });
+  COMPETITIONS.forEach(function (c) { headers.push(c.name, 'Próby - ' + c.short); });
   sh.getRange(CFG.headerRow, 1, 1, nCols).setValues([headers])
     .setFontWeight('bold').setBackground('#d9e2f3').setWrap(true).setVerticalAlignment('middle');
 
@@ -110,58 +127,78 @@ function buildConfigSheet_(ss) {
   body(2).setNumberFormat('0.00').setDataValidation(SpreadsheetApp.newDataValidation()
     .requireNumberBetween(0, 1).setAllowInvalid(false)
     .setHelpText('Współczynnik od 0 do 1, np. 0,67').build());
-  const kgRule = SpreadsheetApp.newDataValidation()
-    .requireNumberGreaterThan(0).setAllowInvalid(false)
-    .setHelpText('Wartość w kg (dokładność 0,1)').build();
   COMPETITIONS.forEach(function (c, i) {
     body(cfgCompCol_(i, 0)).insertCheckboxes().setHorizontalAlignment('center');
     body(cfgCompCol_(i, 1)).setNumberFormat('0').setHorizontalAlignment('center')
       .setDataValidation(SpreadsheetApp.newDataValidation()
         .requireNumberBetween(1, 10).setAllowInvalid(false)
         .setHelpText('Ilość prób: 1-10').build());
-    body(cfgCompCol_(i, 2)).setNumberFormat('0.0').setHorizontalAlignment('center').setDataValidation(kgRule);
-    body(cfgCompCol_(i, 3)).setNumberFormat('0.0').setHorizontalAlignment('center').setDataValidation(kgRule);
   });
-
   sh.getRange(CFG.firstRow, 1, DEFAULT_CATEGORIES.length, nCols).setValues(DEFAULT_CATEGORIES);
+  sh.getRange(CFG.headerRow, 1, CFG.maxRows + 1, nCols)
+    .setBorder(true, true, true, true, true, true, '#c0c7d4', SpreadsheetApp.BorderStyle.SOLID);
+  note(CFG.firstRow + CFG.maxRows,
+    'Maksymalnie ' + CFG.maxRows + ' kategorii. Pusty wiersz = brak kategorii. Zmiana konkurencji lub ilości prób działa dla nowo generowanych list - istniejącą listę trzeba usunąć i wygenerować od nowa.');
 
-  sh.getRange(CFG.firstRow + CFG.maxRows + 1, 1)
-    .setValue('Pusty wiersz = brak kategorii. Zmiana konkurencji lub ilości prób działa dla nowo generowanych list - istniejącą listę trzeba usunąć i wygenerować od nowa.')
-    .setFontColor('#666666').setFontStyle('italic');
+  // Tabela zawodnika referencyjnego
+  sh.getRange(CFG.refTitleRow, 1).setValue('Zawodnik referencyjny').setFontSize(12).setFontWeight('bold');
+  const refHeaders = ['Kategoria'];
+  COMPETITIONS.forEach(function (c) { refHeaders.push(c.short + ' - waga zawodnika ref. [kg]', c.short + ' - ciężar ref. [kg]'); });
+  sh.getRange(CFG.refHeaderRow, 1, 1, nRefCols).setValues([refHeaders])
+    .setFontWeight('bold').setBackground('#d9e2f3').setWrap(true).setVerticalAlignment('middle');
+
+  // Nazwy kategorii przepisywane z tabeli kategorii (nie wpisuje się ich drugi raz).
+  const nameFormulas = [];
+  for (let k = 0; k < CFG.maxRows; k++) {
+    const src = 'A' + (CFG.firstRow + k);
+    nameFormulas.push(['=IF(' + src + '="";"";' + src + ')']);
+  }
+  sh.getRange(CFG.refFirstRow, 1, CFG.maxRows, 1).setFormulas(nameFormulas).setFontColor('#666666').setBackground('#f3f3f3');
+
+  sh.getRange(CFG.refFirstRow, 2, CFG.maxRows, nRefCols - 1)
+    .setNumberFormat('0.0').setHorizontalAlignment('center')
+    .setDataValidation(SpreadsheetApp.newDataValidation()
+      .requireNumberGreaterThan(0).setAllowInvalid(false)
+      .setHelpText('Wartość w kg (dokładność 0,1)').build());
+  sh.getRange(CFG.refFirstRow, 2, DEFAULT_REFS.length, nRefCols - 1).setValues(DEFAULT_REFS);
+  sh.getRange(CFG.refHeaderRow, 1, CFG.maxRows + 1, nRefCols)
+    .setBorder(true, true, true, true, true, true, '#c0c7d4', SpreadsheetApp.BorderStyle.SOLID);
+  note(CFG.refFirstRow + CFG.maxRows,
+    'wynik = ciężar / waga^wsp * waga_ref^wsp / ciężar_ref - zawodnik referencyjny ma wynik 1. Puste pola = wynik bez skalowania.');
 
   sh.setColumnWidth(1, 230);
-  for (let c = 2; c <= nCols; c++) sh.setColumnWidth(c, 120);
-  sh.setFrozenRows(CFG.headerRow);
+  for (let c = 2; c <= Math.max(nCols, nRefCols); c++) sh.setColumnWidth(c, 130);
   return sh;
 }
 
-/** Odczytuje konfigurację zawodów. */
+/** Odczytuje konfigurację zawodów (tabela kategorii + tabela referencji, wiersz w wiersz). */
 function readConfig_(ss) {
   const sh = ss.getSheetByName(SHEET_CONFIG);
   if (!sh) throw new Error('Brak zakładki „' + SHEET_CONFIG + '” - uruchom ⚙️ Setup → Zbuduj szablon.');
 
-  const nCols = 2 + CFG.perComp * COMPETITIONS.length;
-  const rows = sh.getRange(CFG.firstRow, 1, CFG.maxRows, nCols).getValues();
+  const rows = sh.getRange(CFG.firstRow, 1, CFG.maxRows, 2 + 2 * COMPETITIONS.length).getValues();
+  const refRows = sh.getRange(CFG.refFirstRow, 1, CFG.maxRows, 1 + 2 * COMPETITIONS.length).getValues();
 
   const decRaw = sh.getRange(CFG.decimalsCell).getValue();
   const decimals = decRaw === '' || isNaN(Number(decRaw))
     ? DEFAULT_DECIMALS
     : Math.max(0, Math.min(6, Math.round(Number(decRaw))));
 
+  const num = function (v) { return v === '' || v === null ? null : Number(v); };
   const categories = [];
-  rows.forEach(function (r) {
+  rows.forEach(function (r, k) {
     const name = String(r[0]).trim();
     if (!name) return;
+    const ref = refRows[k];
     const comps = [];
     COMPETITIONS.forEach(function (c, i) {
-      const col = function (offset) { return r[cfgCompCol_(i, offset) - 1]; };
-      if (col(0) === true) {
-        const attempts = Math.round(Number(col(1)));
+      if (r[cfgCompCol_(i, 0) - 1] === true) {
+        const attempts = Math.round(Number(r[cfgCompCol_(i, 1) - 1]));
         comps.push({
           key: c.key, name: c.name, short: c.short,
           attempts: attempts >= 1 ? attempts : 3,
-          refBodyweight: col(2) === '' ? null : Number(col(2)),
-          refWeight: col(3) === '' ? null : Number(col(3)),
+          refBodyweight: num(ref[cfgRefCol_(i, 0) - 1]),
+          refWeight: num(ref[cfgRefCol_(i, 1) - 1]),
         });
       }
     });
