@@ -230,7 +230,12 @@ function rebuildResultsUnlocked_() {
     const coef = cfgCat && cfgCat.coef >= 0 && cfgCat.coef <= 1 ? cfgCat.coef : meta.coef;
 
     const athletes = readAthletes_(x.sheet, meta);
-    const res = computeRanking_(athletes, meta.comps.length, coef, cfg.decimals);
+    // Referencje z bieżącej konfiguracji (jak współczynnik); gdy kategorii już nie ma - z chwili generowania listy.
+    const refs = meta.comps.map(function (c) {
+      const live = cfgCat && cfgCat.comps.filter(function (k) { return k.key === c.key; })[0];
+      return live || c;
+    });
+    const res = computeRanking_(athletes, refs, coef, cfg.decimals);
 
     rows.push(['']);
     rows.push([meta.category + '   (współczynnik ' + coef + ')']);
@@ -334,8 +339,17 @@ function readAthletes_(sheet, meta) {
 /**
  * Liczy wyniki kategorii. Czysta funkcja (bez API arkusza) - łatwa do przetestowania.
  * athletes: [{ nr, name, bw, tieWon, attempts: [[kg, ...] per konkurencja] }]
+ * refs: [{ refBodyweight, refWeight } per konkurencja]
+ *
+ * wynik = ciężar / waga^wsp * waga_ref^wsp / ciężar_ref
+ * (zawodnik referencyjny = 1; referencja tylko skaluje wynik, kolejności nie zmienia).
+ * Brak referencji = wynik bez skalowania.
  */
-function computeRanking_(athletes, nComps, coef, decimals) {
+function computeRanking_(athletes, refs, coef, decimals) {
+  const nComps = refs.length;
+  const factors = refs.map(function (r) {
+    return r && r.refBodyweight > 0 && r.refWeight > 0 ? Math.pow(r.refBodyweight, coef) / r.refWeight : 1;
+  });
   const rows = athletes.map(function (a) {
     const notes = [];
     if (a.bw === null) notes.push('brak wagi');
@@ -343,7 +357,7 @@ function computeRanking_(athletes, nComps, coef, decimals) {
     for (let i = 0; i < nComps; i++) {
       const att = a.attempts[i] || [];
       const best = att.length ? Math.max.apply(null, att) : null;
-      const score = best !== null && a.bw ? round_(best / Math.pow(a.bw, coef), decimals) : null;
+      const score = best !== null && a.bw ? round_(best / Math.pow(a.bw, coef) * factors[i], decimals) : null;
       comps.push({ best: best, score: score, place: null });
     }
     return { nr: a.nr, name: a.name, bw: a.bw, tieWon: a.tieWon, comps: comps, notes: notes };
