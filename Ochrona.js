@@ -83,14 +83,22 @@ function applyStaticProtections_(ss) {
  */
 function syncLockProtections_(ss) {
   const st = getLockState_();
-  if (!st.athletes) {
-    getAllListSheets_(ss).forEach(function (x) {
-      removeProtections_(x.sheet, SpreadsheetApp.ProtectionType.RANGE, 'zbm:zawodnicy');
-    });
-  }
+  const has = function (sheet, type, desc) {
+    return sheet.getProtections(type).some(function (p) { return p.getDescription() === desc; });
+  };
+  getAllListSheets_(ss).forEach(function (x) {
+    const RANGE = SpreadsheetApp.ProtectionType.RANGE;
+    if (!st.athletes) removeProtections_(x.sheet, RANGE, 'zbm:zawodnicy');
+    else if (!has(x.sheet, RANGE, 'zbm:zawodnicy')) protectAthletes_(x.sheet); // brakująca ochrona + wzorzec
+  });
   const cfg = ss.getSheetByName(SHEET_CONFIG);
   if (!cfg) return;
-  if (!st.config) removeProtections_(cfg, SpreadsheetApp.ProtectionType.SHEET, 'zbm:config');
+  const SHEET = SpreadsheetApp.ProtectionType.SHEET;
+  if (!st.config) removeProtections_(cfg, SHEET, 'zbm:config');
+  else if (!has(cfg, SHEET, 'zbm:config')) {
+    const p = hardProtect_(cfg.protect().setDescription('zbm:config'));
+    p.setUnprotectedRanges([cfg.getRange(CFG.autoCell)]);
+  }
   // Napisy statusu (np. po zbudowaniu Konfiguracji od nowa przy włączonej blokadzie).
   cfg.getRange(CFG.lockConfigCell).setValue(lockLabel_(st.config));
   cfg.getRange(CFG.lockAthletesCell).setValue(lockLabel_(st.athletes));
