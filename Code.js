@@ -95,6 +95,9 @@ function buildListSheet_(ss, cat, cfg) {
   sh.getRange(LIST.groupRow, 2, 1, LIST.fixedCols - 1).merge();
   comps.forEach(function (c) {
     if (c.attempts > 1) sh.getRange(LIST.groupRow, c.col, 1, c.attempts).merge();
+    // Nazwa konkurencji z konfiguracji - zmiana nazwy od razu widoczna na liście.
+    const idx = COMPETITIONS.map(function (k) { return k.key; }).indexOf(c.key);
+    sh.getRange(LIST.groupRow, c.col).setFormula('=' + compCellA1_(idx, 'name', true) + '&" [kg]"');
   });
 
   sh.getRange(LIST.headerRow, 1, 1, nCols).setValues([headers])
@@ -244,7 +247,9 @@ function rebuildResultsUnlocked_() {
     const header = ['Miejsce', 'Zawodnik', 'Nr', 'Waga [kg]'];
     const scoreCols = [];
     meta.comps.forEach(function (c) {
-      header.push(c.short + ' - najlepsza [kg]', c.short + ' - wynik', c.short + ' - miejsce');
+      const live = cfg.competitions.filter(function (k) { return k.key === c.key; })[0];
+      const short = (live || c).short;
+      header.push(short + ' - najlepsza [kg]', short + ' - wynik', short + ' - miejsce');
       scoreCols.push(header.length - 1);
     });
     header.push('Suma miejsc', 'Dogrywka', 'Punkty', 'Uwagi');

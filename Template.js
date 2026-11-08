@@ -23,6 +23,12 @@ const CFG = {
   decimalsCell: 'B4',
   lockConfigCell: 'B5',
   lockAthletesCell: 'B6',
+  // Tabela nazw konkurencji (D3:F5): etykieta, nazwa, skrót - wiersz na konkurencję w kolejności COMPETITIONS.
+  compHeaderRow: 3,
+  compFirstRow: 4,
+  compLabelCol: 4,
+  compNameCol: 5,
+  compShortCol: 6,
   // Tabela kategorii: Kategoria, Współczynnik, potem dla każdej konkurencji: czy jest, ilość prób.
   headerRow: 8,
   firstRow: 9,
@@ -41,6 +47,25 @@ function cfgCompCol_(i, offset) {
 /** Kolumna (1-based) w tabeli referencji: konkurencja i (0-based), 0 = waga ref., 1 = ciężar ref. */
 function cfgRefCol_(i, offset) {
   return 2 + 2 * i + offset;
+}
+
+/** Adres A1 komórki z nazwą (field = 'name') lub skrótem ('short') konkurencji i; withSheet = z nazwą zakładki. */
+function compCellA1_(i, field, withSheet) {
+  const col = field === 'short' ? CFG.compShortCol : CFG.compNameCol;
+  const a1 = String.fromCharCode(64 + col) + (CFG.compFirstRow + i);
+  return withSheet ? "'" + SHEET_CONFIG + "'!" + a1 : a1;
+}
+
+/** Konkurencje z nazwami z konfiguracji (puste pole = nazwa domyślna). */
+function readCompetitions_(sh) {
+  const vals = sh
+    ? sh.getRange(CFG.compFirstRow, CFG.compNameCol, COMPETITIONS.length, 2).getValues()
+    : COMPETITIONS.map(function () { return ['', '']; });
+  return COMPETITIONS.map(function (c, i) {
+    const name = String(vals[i][0]).trim();
+    const short = String(vals[i][1]).trim();
+    return { key: c.key, name: name || c.name, short: short || name || c.short };
+  });
 }
 
 /** Kategoria, współczynnik, potem dla każdej konkurencji: [czy jest, ilość prób]. */
@@ -117,11 +142,25 @@ function buildConfigSheet_(ss) {
       .setHelpText('Liczba całkowita 0-6').build());
   sh.getRange('B5:B6').setValues([[lockLabel_(false)], [lockLabel_(false)]]).setFontColor('#666666');
 
-  // Tabela kategorii
+  // Tabela nazw konkurencji
+  sh.getRange(CFG.compHeaderRow, CFG.compLabelCol, 1, 3)
+    .setValues([['Konkurencja', 'Nazwa konkurencji', 'Skrót']])
+    .setFontWeight('bold').setBackground('#d9e2f3');
+  sh.getRange(CFG.compFirstRow, CFG.compLabelCol, COMPETITIONS.length, 3)
+    .setValues(COMPETITIONS.map(function (c, i) { return ['Konkurencja ' + (i + 1), c.name, c.short]; }));
+  sh.getRange(CFG.compFirstRow, CFG.compLabelCol, COMPETITIONS.length, 1).setFontColor('#666666');
+  sh.getRange(CFG.compHeaderRow, CFG.compLabelCol, COMPETITIONS.length + 1, 3)
+    .setBorder(true, true, true, true, true, true, '#c0c7d4', SpreadsheetApp.BorderStyle.SOLID);
+
+  // Tabela kategorii - nagłówki konkurencji jako formuły (zmiana nazwy od razu widoczna).
   const headers = ['Kategoria', 'Współczynnik (0-1)'];
   COMPETITIONS.forEach(function (c) { headers.push(c.name, 'Próby - ' + c.short); });
   sh.getRange(CFG.headerRow, 1, 1, nCols).setValues([headers])
     .setFontWeight('bold').setBackground('#d9e2f3').setWrap(true).setVerticalAlignment('middle');
+  COMPETITIONS.forEach(function (c, i) {
+    sh.getRange(CFG.headerRow, cfgCompCol_(i, 0)).setFormula('=' + compCellA1_(i, 'name'));
+    sh.getRange(CFG.headerRow, cfgCompCol_(i, 1)).setFormula('="Próby - "&' + compCellA1_(i, 'short'));
+  });
 
   const body = function (col) { return sh.getRange(CFG.firstRow, col, CFG.maxRows, 1); };
   body(2).setNumberFormat('0.00').setDataValidation(SpreadsheetApp.newDataValidation()
@@ -146,6 +185,10 @@ function buildConfigSheet_(ss) {
   COMPETITIONS.forEach(function (c) { refHeaders.push(c.short + ' - waga zawodnika ref. [kg]', c.short + ' - ciężar ref. [kg]'); });
   sh.getRange(CFG.refHeaderRow, 1, 1, nRefCols).setValues([refHeaders])
     .setFontWeight('bold').setBackground('#d9e2f3').setWrap(true).setVerticalAlignment('middle');
+  COMPETITIONS.forEach(function (c, i) {
+    sh.getRange(CFG.refHeaderRow, cfgRefCol_(i, 0)).setFormula('=' + compCellA1_(i, 'short') + '&" - waga zawodnika ref. [kg]"');
+    sh.getRange(CFG.refHeaderRow, cfgRefCol_(i, 1)).setFormula('=' + compCellA1_(i, 'short') + '&" - ciężar ref. [kg]"');
+  });
 
   // Nazwy kategorii przepisywane z tabeli kategorii (nie wpisuje się ich drugi raz).
   const nameFormulas = [];
@@ -185,13 +228,14 @@ function readConfig_(ss) {
     : Math.max(0, Math.min(6, Math.round(Number(decRaw))));
 
   const num = function (v) { return v === '' || v === null ? null : Number(v); };
+  const competitions = readCompetitions_(sh);
   const categories = [];
   rows.forEach(function (r, k) {
     const name = String(r[0]).trim();
     if (!name) return;
     const ref = refRows[k];
     const comps = [];
-    COMPETITIONS.forEach(function (c, i) {
+    competitions.forEach(function (c, i) {
       if (r[cfgCompCol_(i, 0) - 1] === true) {
         const attempts = Math.round(Number(r[cfgCompCol_(i, 1) - 1]));
         comps.push({
@@ -208,6 +252,7 @@ function readConfig_(ss) {
   return {
     title: String(sh.getRange(CFG.titleCell).getValue()).trim(),
     decimals: decimals,
+    competitions: competitions,
     categories: categories,
   };
 }
