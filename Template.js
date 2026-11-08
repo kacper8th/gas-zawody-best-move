@@ -103,6 +103,7 @@ function setupTemplate() {
 
   if (!ss.getSheetByName(SHEET_CONFIG)) buildConfigSheet_(ss);
   if (!ss.getSheetByName(SHEET_RESULTS)) createResultsSheet_(ss);
+  if (!ss.getSheetByName(SHEET_RULES)) buildRulesSheet_(ss);
   rebuildResults();
 
   // Domyślna pusta zakładka nowego arkusza - usuwana tylko, gdy naprawdę pusta.

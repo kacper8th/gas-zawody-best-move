@@ -25,6 +25,7 @@ function buildZawodyMenu_(ui) {
   ui.createMenu('🏋️ Zawody')
     .addItem('Generuj listy startowe', 'generateStartLists')
     .addItem('Przelicz wyniki', 'rebuildResults')
+    .addItem('🖨️ Drukuj regulamin (PDF)', 'printRules')
     .addSeparator()
     .addItem(st.config ? '🔓 Odblokuj konfigurację' : '🔒 Zablokuj konfigurację', 'toggleConfigLock')
     .addItem(st.athletes ? '🔓 Odblokuj dane zawodników' : '🔒 Zablokuj dane zawodników', 'toggleAthletesLock')
