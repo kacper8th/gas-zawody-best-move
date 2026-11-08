@@ -107,7 +107,7 @@ function restoreAthletesFromLock() {
   getListSheets_(ss).forEach(function (x) {
     const snap = readAthletesSnapshot_(x.sheet);
     if (!snap) return;
-    const width = x.meta.tieCol - 1; // kolumny od Imienia do Dogrywki (bez Nr - jest formułą)
+    const width = listWidth_(x.meta) - 1; // od Imienia do Uwag/Dogrywki (bez Nr - jest formułą)
     const full = x.sheet.getRange(LIST.firstRow, 2, LIST.maxRows, width).getValues();
     const d = lockDiff_(snap.cells, full.map(function (r) { return r.slice(0, 3); }));
     if (!d.any) return;
