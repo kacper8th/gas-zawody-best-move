@@ -20,6 +20,7 @@ function getDetailsSheet_(ss) {
 /** Tekst próby: „18,0 ✓” (zaliczona) / „20,0 ✗” (spalona) / '' (brak). */
 function attemptLabel_(a) {
   if (!a || a.kg === null) return '';
+  if (a.kg === 0 && !a.ok) return '✗'; // spalona, ciężar nieznany
   return String(Number(a.kg).toFixed(1)).replace('.', ',') + (a.ok ? ' ✓' : ' ✗');
 }
 

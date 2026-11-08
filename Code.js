@@ -115,7 +115,7 @@ function buildListSheet_(ss, cat, cfg) {
 
   const kgRule = SpreadsheetApp.newDataValidation()
     .requireNumberGreaterThanOrEqualTo(0).setAllowInvalid(false)
-    .setHelpText('Ciężar w kg (dokładność 0,1). Próba zaliczona = zaznacz „Zal.” obok.').build();
+    .setHelpText('Ciężar w kg (dokładność 0,1). Próba zaliczona = zaznacz „Zal.” obok. Spalona o nieznanym ciężarze = 0.').build();
   const weightRule = SpreadsheetApp.newDataValidation()
     .requireNumberGreaterThan(0).setAllowInvalid(false)
     .setHelpText('Waga zawodnika w kg (dokładność 0,1).').build();
@@ -657,6 +657,7 @@ function validateList_(values, meta, cfg) {
           }
           return;
         }
+        if (a.kg === 0 && !a.ok) return; // 0 bez „Zal.” = spalona o nieznanym ciężarze - nie liczy się do kolejności
         if (on('ORDER') && prev !== null && a.kg < prev) {
           errors.push(who + ' - ' + short + ': próba ' + (i + 1) + ' (' + a.kg + ' kg) lżejsza niż próba ' + prevNo + ' (' + prev + ' kg)');
           cells.push([row, a.col]);
