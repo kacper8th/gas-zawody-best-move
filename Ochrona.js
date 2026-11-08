@@ -89,5 +89,10 @@ function syncLockProtections_(ss) {
     });
   }
   const cfg = ss.getSheetByName(SHEET_CONFIG);
-  if (cfg && !st.config) removeProtections_(cfg, SpreadsheetApp.ProtectionType.SHEET, 'zbm:config');
+  if (!cfg) return;
+  if (!st.config) removeProtections_(cfg, SpreadsheetApp.ProtectionType.SHEET, 'zbm:config');
+  // Napisy statusu (np. po zbudowaniu Konfiguracji od nowa przy włączonej blokadzie).
+  cfg.getRange(CFG.lockConfigCell).setValue(lockLabel_(st.config));
+  cfg.getRange(CFG.lockAthletesCell).setValue(lockLabel_(st.athletes));
+  if (st.config) { SpreadsheetApp.flush(); saveSnapshot_(cfg, SNAP_CONFIG, configArea_(), false); }
 }
