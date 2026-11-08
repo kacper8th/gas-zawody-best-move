@@ -81,6 +81,9 @@ function buildListSheet_(ss, cat, cfg) {
   headers.push('Dogrywka - miejsce');
   groups.push('Dogrywka');
   const tieCol = headers.length;
+  headers.push('Uwagi');
+  groups.push('');
+  const notesCol = headers.length; // dowolny komentarz - pokazywany w Wynikach
   const nCols = headers.length;
   const lastRow = LIST.firstRow + LIST.maxRows - 1;
 
@@ -153,11 +156,13 @@ function buildListSheet_(ss, cat, cfg) {
   sh.setColumnWidth(4, 85);
   for (let c = LIST.fixedCols + 1; c < tieCol; c++) sh.setColumnWidth(c, (c - LIST.fixedCols) % 2 ? 65 : 38);
   sh.setColumnWidth(tieCol, 95);
+  sh.setColumnWidth(notesCol, 220);
+  sh.getRange(LIST.firstRow, notesCol, LIST.maxRows, 1).setWrap(true);
   sh.setFrozenRows(LIST.headerRow);
   sh.setFrozenColumns(LIST.fixedCols);
 
   sh.addDeveloperMetadata(META_KEY, JSON.stringify({
-    layout: 2, category: cat.name, coef: cat.coef, comps: comps, tieCol: tieCol,
+    layout: 2, category: cat.name, coef: cat.coef, comps: comps, tieCol: tieCol, notesCol: notesCol,
   }));
 
   // Nr jest liczony - chroniony zawsze (dla właściciela pilnuje tego onEdit).
@@ -457,9 +462,14 @@ function readAttempts_(row, c, meta) {
   return out;
 }
 
+/** Liczba kolumn listy z danymi (do Dogrywki, a w nowych listach - do Uwag). */
+function listWidth_(meta) {
+  return meta.notesCol || meta.tieCol;
+}
+
 /** Czyta zawodników z listy startowej (pomija puste wiersze). Do wyniku liczą się tylko próby zaliczone. */
 function readAthletes_(sheet, meta) {
-  const values = sheet.getRange(LIST.firstRow, 1, LIST.maxRows, meta.tieCol).getValues();
+  const values = sheet.getRange(LIST.firstRow, 1, LIST.maxRows, listWidth_(meta)).getValues();
   const out = [];
   values.forEach(function (r) {
     const first = String(r[1]).trim();
@@ -467,6 +477,7 @@ function readAthletes_(sheet, meta) {
     if (!first && !last) return;
     out.push({
       nr: r[0],
+      note: meta.notesCol ? String(r[meta.notesCol - 1]).trim() : '',
       name: (first + ' ' + last).trim(),
       bw: toNum_(r[LIST.weightCol - 1]),
       tiePlace: toNum_(r[meta.tieCol - 1]),
@@ -673,6 +684,7 @@ function computeRanking_(athletes, refs, coef, decimals) {
   });
   const rows = athletes.map(function (a) {
     const notes = [];
+    if (a.note) notes.push(a.note);
     if (a.bw === null) notes.push('brak wagi');
     const comps = [];
     for (let i = 0; i < nComps; i++) {
