@@ -1,6 +1,6 @@
 /**
- * Wydruk wyników szczegółowych do PDF: każda kategoria od nowej strony,
- * na stronie ranking każdej konkurencji (próby ✓/✗, najlepsza, wynik).
+ * Wydruk wyników szczegółowych do PDF: każda konkurencja każdej kategorii na osobnej stronie
+ * (ranking konkurencji: próby ✓/✗, najlepsza, wynik).
  * Korzysta z escapeHtml_(), fmtPl_(), attemptLabel_(), downloadDialogHtml_().
  */
 
@@ -45,7 +45,7 @@ function printDetails() {
   ui.showModalDialog(dialog, '🖨️ Wyniki szczegółowe (PDF)');
 }
 
-/** HTML wyników szczegółowych (A4, kategoria = strona, konkurencje jedna pod drugą). */
+/** HTML wyników szczegółowych (A4, konkurencja w kategorii = strona). */
 function detailsHtml_(title, sections, decimals, stamp) {
   const accent = '#1f4e79';
   const css = [
@@ -67,8 +67,10 @@ function detailsHtml_(title, sections, decimals, stamp) {
     '.foot { margin-top: 10pt; font-size: 8pt; color: #888; text-align: right; }',
   ].join('\n');
 
-  const pages = sections.map(function (s, si) {
-    const tables = s.comps.map(function (c) {
+  // Każda konkurencja każdej kategorii = osobna strona.
+  const pageList = [];
+  sections.forEach(function (s) {
+    s.comps.forEach(function (c) {
       const ci = c.index;
       let head = '<tr><th>Miejsce</th><th>Zawodnik</th><th>Waga [kg]</th>';
       for (let i = 1; i <= c.attempts; i++) head += '<th>Próba ' + i + '</th>';
@@ -92,13 +94,15 @@ function detailsHtml_(title, sections, decimals, stamp) {
         return tr;
       }).join('');
 
-      return '<div class="comp">' + escapeHtml_(c.name) + '</div><table><thead>' + head + '</thead><tbody>' + body + '</tbody></table>';
-    }).join('');
-
-    return '<div class="page' + (si === sections.length - 1 ? ' last' : '') + '">' +
-      '<div class="event">' + escapeHtml_(title) + '</div>' +
-      '<div class="cat">' + escapeHtml_(s.category) + '</div>' + tables +
-      '<div class="foot">Wydruk: ' + escapeHtml_(stamp) + '</div></div>';
+      pageList.push(
+        '<div class="event">' + escapeHtml_(title) + '</div>' +
+        '<div class="cat">' + escapeHtml_(s.category) + '</div>' +
+        '<div class="comp">' + escapeHtml_(c.name) + '</div><table><thead>' + head + '</thead><tbody>' + body + '</tbody></table>' +
+        '<div class="foot">Wydruk: ' + escapeHtml_(stamp) + '</div>');
+    });
+  });
+  const pages = pageList.map(function (content, i) {
+    return '<div class="page' + (i === pageList.length - 1 ? ' last' : '') + '">' + content + '</div>';
   }).join('\n');
 
   return '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' + css + '</style></head><body>' + pages + '</body></html>';
