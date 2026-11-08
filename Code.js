@@ -6,7 +6,7 @@
  *    próba spalona = 0,
  *  - w konkurencji lepszy wynik = lepsze miejsce; remis = to samo miejsce, kolejne miejsce przeskakuje (1, 1, 3),
  *  - punkty = suma miejsc ze wszystkich konkurencji, mniej punktów = wyżej,
- *  - remis w punktach na miejscach 1–3: zwycięzca dogrywki (zaznaczony na liście) dostaje −0,5 pkt.
+ *  - remis w punktach na miejscach 1-3: zwycięzca dogrywki (zaznaczony na liście) dostaje −0,5 pkt.
  */
 
 /** Układ listy startowej. Kolumny stałe: Nr, Imię, Nazwisko, Rok ur., Waga. */
@@ -39,7 +39,7 @@ function generateStartLists() {
 
   const created = [], existing = [], errors = [];
   cfg.categories.forEach(function (cat) {
-    if (!(cat.coef >= 0 && cat.coef <= 1)) { errors.push(cat.name + ': brak lub błędny współczynnik (0–1)'); return; }
+    if (!(cat.coef >= 0 && cat.coef <= 1)) { errors.push(cat.name + ': brak lub błędny współczynnik (0-1)'); return; }
     if (!cat.comps.length) { errors.push(cat.name + ': nie wybrano żadnej konkurencji'); return; }
     const sh = findListSheet_(ss, cat.name);
     if (sh) { existing.push(cat.name + ' (zakładka „' + sh.getName() + '”)'); return; }
@@ -51,7 +51,7 @@ function generateStartLists() {
 
   const msg = [];
   if (created.length) msg.push('Utworzono listy:\n• ' + created.join('\n• '));
-  if (existing.length) msg.push('Lista już istnieje — aby utworzyć nową, najpierw usuń starą zakładkę:\n• ' + existing.join('\n• '));
+  if (existing.length) msg.push('Lista już istnieje - aby utworzyć nową, najpierw usuń starą zakładkę:\n• ' + existing.join('\n• '));
   if (errors.length) msg.push('Pominięto (popraw konfigurację):\n• ' + errors.join('\n• '));
   if (!msg.length) msg.push('Brak kategorii w konfiguracji.');
   ui.alert('Listy startowe', msg.join('\n\n'), ui.ButtonSet.OK);
@@ -63,7 +63,7 @@ function buildListSheet_(ss, cat, cfg) {
   const sh = ss.insertSheet(listSheetName_(cat.name), index);
 
   const headers = ['Nr', 'Imię', 'Nazwisko', 'Rok ur.', 'Waga [kg]'];
-  const groups = ['Zawodnik', '', '', '', ''];
+  const groups = ['', 'Zawodnik', '', '', ''];
   const comps = [];
   cat.comps.forEach(function (c) {
     comps.push({ key: c.key, name: c.name, short: c.short, col: headers.length + 1, attempts: c.attempts });
@@ -84,12 +84,11 @@ function buildListSheet_(ss, cat, cfg) {
   if (sh.getMaxRows() > lastRow) sh.deleteRows(lastRow + 1, sh.getMaxRows() - lastRow);
 
   sh.getRange(LIST.titleRow, 1)
-    .setValue('Lista startowa – ' + cat.name + (cfg.title ? ' · ' + cfg.title : ''))
+    .setValue('Lista startowa - ' + cat.name + (cfg.title ? ' · ' + cfg.title : ''))
     .setFontSize(14).setFontWeight('bold');
 
   sh.getRange(LIST.groupRow, 1, 1, nCols).setValues([groups])
     .setFontWeight('bold').setHorizontalAlignment('center').setBackground('#d9e2f3');
-  sh.getRange(LIST.groupRow, 1, 1, LIST.fixedCols).merge();
   comps.forEach(function (c) {
     if (c.attempts > 1) sh.getRange(LIST.groupRow, c.col, 1, c.attempts).merge();
   });
@@ -97,7 +96,7 @@ function buildListSheet_(ss, cat, cfg) {
   sh.getRange(LIST.headerRow, 1, 1, nCols).setValues([headers])
     .setFontWeight('bold').setHorizontalAlignment('center').setBackground('#eef3fb').setWrap(true);
 
-  // Numeracja od 1 — pojawia się, gdy wpisane jest imię lub nazwisko.
+  // Numeracja od 1 - pojawia się, gdy wpisane jest imię lub nazwisko.
   const r1 = LIST.firstRow;
   sh.getRange(r1, 1).setFormula(
     '=ARRAYFORMULA(IF((B' + r1 + ':B' + lastRow + '&C' + r1 + ':C' + lastRow + ')<>"";ROW(B' + r1 + ':B' + lastRow + ')-' + (r1 - 1) + ';""))');
@@ -199,14 +198,14 @@ function rebuildResultsUnlocked_() {
   const rows = [];
   const fmt = []; // { row, kind, width, scoreCols }
 
-  rows.push([cfg.title ? 'Wyniki – ' + cfg.title : 'Wyniki']);
+  rows.push([cfg.title ? 'Wyniki - ' + cfg.title : 'Wyniki']);
   fmt.push({ row: rows.length, kind: 'title' });
   rows.push(['Przeliczono: ' + Utilities.formatDate(new Date(), 'Europe/Warsaw', 'yyyy-MM-dd HH:mm:ss')]);
   fmt.push({ row: rows.length, kind: 'info' });
 
   if (!lists.length) {
     rows.push(['']);
-    rows.push(['Brak list startowych — 🏋️ Zawody → Generuj listy startowe.']);
+    rows.push(['Brak list startowych - 🏋️ Zawody → Generuj listy startowe.']);
     fmt.push({ row: rows.length, kind: 'info' });
   }
 
@@ -225,7 +224,7 @@ function rebuildResultsUnlocked_() {
     const header = ['Miejsce', 'Zawodnik', 'Nr', 'Waga [kg]'];
     const scoreCols = [];
     meta.comps.forEach(function (c) {
-      header.push(c.short + ' – najlepsza [kg]', c.short + ' – wynik', c.short + ' – miejsce');
+      header.push(c.short + ' - najlepsza [kg]', c.short + ' - wynik', c.short + ' - miejsce');
       scoreCols.push(header.length - 1);
     });
     header.push('Suma miejsc', 'Dogrywka', 'Punkty', 'Uwagi');
@@ -251,7 +250,7 @@ function rebuildResultsUnlocked_() {
     }
 
     res.unresolved.forEach(function (u) {
-      rows.push(['', '⚠ Remis na miejscu ' + u.place + ': ' + u.names.join(', ') + ' — zaznacz zwycięzcę dogrywki na liście startowej.']);
+      rows.push(['', '⚠ Remis na miejscu ' + u.place + ': ' + u.names.join(', ') + ' - zaznacz zwycięzcę dogrywki na liście startowej.']);
       fmt.push({ row: rows.length, kind: 'warn' });
     });
   });
@@ -318,7 +317,7 @@ function readAthletes_(sheet, meta) {
 }
 
 /**
- * Liczy wyniki kategorii. Czysta funkcja (bez API arkusza) — łatwa do przetestowania.
+ * Liczy wyniki kategorii. Czysta funkcja (bez API arkusza) - łatwa do przetestowania.
  * athletes: [{ nr, name, bw, tieWon, attempts: [[kg, ...] per konkurencja] }]
  */
 function computeRanking_(athletes, nComps, coef, decimals) {
@@ -347,14 +346,14 @@ function computeRanking_(athletes, nComps, coef, decimals) {
     r.sum = r.comps.reduce(function (s, c) { return s + c.place; }, 0);
   });
 
-  // Dogrywka: tylko przy remisie w sumie miejsc na miejscach 1–3.
+  // Dogrywka: tylko przy remisie w sumie miejsc na miejscach 1-3.
   const rawPlaces = competitionRank_(rows.map(function (r) { return r.sum; }), false);
   rows.forEach(function (r, k) {
     const tied = rows.some(function (o, j) { return j !== k && o.sum === r.sum; });
     r.tiebreak = 0;
     if (r.tieWon) {
       if (tied && rawPlaces[k] <= TIEBREAK_MAX_PLACE) r.tiebreak = TIEBREAK_BONUS;
-      else r.notes.push('dogrywka nie dotyczy (brak remisu na miejscach 1–' + TIEBREAK_MAX_PLACE + ')');
+      else r.notes.push('dogrywka nie dotyczy (brak remisu na miejscach 1-' + TIEBREAK_MAX_PLACE + ')');
     }
     r.points = r.sum + r.tiebreak;
   });
@@ -400,7 +399,7 @@ function toNum_(v) {
 }
 
 // ───────────────────────────── Blokady ─────────────────────────────
-// Ochrona Google nie blokuje właściciela arkusza ani tego, kto ją założył — blokuje pozostałych edytorów.
+// Ochrona Google nie blokuje właściciela arkusza ani tego, kto ją założył - blokuje pozostałych edytorów.
 
 function getLockState_() {
   try {

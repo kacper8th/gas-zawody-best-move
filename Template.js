@@ -2,14 +2,14 @@
  * Szablon arkusza zawody-best-move (zawody hardstyle kettlebell).
  *
  * setupTemplate() jest idempotentna:
- *  - „Konfiguracja” (dane wpisywane przez Kacpra) — zakładana tylko, jeśli nie istnieje,
- *  - „Wyniki” (zakładka wyliczana) — przeliczana od nowa,
+ *  - „Konfiguracja” (dane wpisywane przez Kacpra) - zakładana tylko, jeśli nie istnieje,
+ *  - „Wyniki” (zakładka wyliczana) - przeliczana od nowa,
  *  - listy startowe tworzy się osobno: 🏋️ Zawody → Generuj listy startowe.
  */
 
 const SHEET_CONFIG = 'Konfiguracja';
 const SHEET_RESULTS = 'Wyniki';
-const LIST_PREFIX = 'Lista – ';
+const LIST_PREFIX = 'Lista - ';
 
 /** Dostępne konkurencje. Kolejność = kolejność kolumn w konfiguracji, listach i wynikach. */
 const COMPETITIONS = [
@@ -32,8 +32,8 @@ const CFG = {
 const DEFAULT_CATEGORIES = [
   ['Kobiety', 0.60, true, 3, true, 3],
   ['Mężczyźni', 0.67, true, 3, true, 3],
-  ['Juniorzy – chłopcy', 0.67, false, 3, true, 3],
-  ['Juniorzy – dziewczęta', 0.60, false, 3, true, 3],
+  ['Juniorzy - chłopcy', 0.67, false, 3, true, 3],
+  ['Juniorzy - dziewczęta', 0.60, false, 3, true, 3],
 ];
 
 const DEFAULT_DECIMALS = 3;
@@ -57,7 +57,7 @@ function setupTemplate() {
   if (!ss.getSheetByName(SHEET_RESULTS)) createResultsSheet_(ss);
   rebuildResults();
 
-  // Domyślna pusta zakładka nowego arkusza — usuwana tylko, gdy naprawdę pusta.
+  // Domyślna pusta zakładka nowego arkusza - usuwana tylko, gdy naprawdę pusta.
   ['Arkusz1', 'Sheet1'].forEach(function (name) {
     const sh = ss.getSheetByName(name);
     if (sh && sh.getLastRow() === 0 && sh.getLastColumn() === 0 && ss.getSheets().length > 1) {
@@ -87,11 +87,11 @@ function buildConfigSheet_(ss) {
     .setHorizontalAlignment('left')
     .setDataValidation(SpreadsheetApp.newDataValidation()
       .requireNumberBetween(0, 6).setAllowInvalid(false)
-      .setHelpText('Liczba całkowita 0–6').build());
+      .setHelpText('Liczba całkowita 0-6').build());
   sh.getRange('B5:B6').setValues([[lockLabel_(false)], [lockLabel_(false)]]).setFontColor('#666666');
 
-  const headers = ['Kategoria', 'Współczynnik (0–1)'];
-  COMPETITIONS.forEach(function (c) { headers.push(c.name, 'Próby – ' + c.short); });
+  const headers = ['Kategoria', 'Współczynnik (0-1)'];
+  COMPETITIONS.forEach(function (c) { headers.push(c.name, 'Próby - ' + c.short); });
   sh.getRange(CFG.headerRow, 1, 1, nCols).setValues([headers])
     .setFontWeight('bold').setBackground('#d9e2f3').setWrap(true).setVerticalAlignment('middle');
 
@@ -104,13 +104,13 @@ function buildConfigSheet_(ss) {
     body(4 + 2 * i).setNumberFormat('0').setHorizontalAlignment('center')
       .setDataValidation(SpreadsheetApp.newDataValidation()
         .requireNumberBetween(1, 10).setAllowInvalid(false)
-        .setHelpText('Ilość prób: 1–10').build());
+        .setHelpText('Ilość prób: 1-10').build());
   });
 
   sh.getRange(CFG.firstRow, 1, DEFAULT_CATEGORIES.length, nCols).setValues(DEFAULT_CATEGORIES);
 
   sh.getRange(CFG.firstRow + CFG.maxRows + 1, 1)
-    .setValue('Pusty wiersz = brak kategorii. Zmiana konkurencji lub ilości prób działa dla nowo generowanych list — istniejącą listę trzeba usunąć i wygenerować od nowa.')
+    .setValue('Pusty wiersz = brak kategorii. Zmiana konkurencji lub ilości prób działa dla nowo generowanych list - istniejącą listę trzeba usunąć i wygenerować od nowa.')
     .setFontColor('#666666').setFontStyle('italic');
 
   sh.setColumnWidth(1, 230);
@@ -122,7 +122,7 @@ function buildConfigSheet_(ss) {
 /** Odczytuje konfigurację zawodów. */
 function readConfig_(ss) {
   const sh = ss.getSheetByName(SHEET_CONFIG);
-  if (!sh) throw new Error('Brak zakładki „' + SHEET_CONFIG + '” — uruchom ⚙️ Setup → Zbuduj szablon.');
+  if (!sh) throw new Error('Brak zakładki „' + SHEET_CONFIG + '” - uruchom ⚙️ Setup → Zbuduj szablon.');
 
   const nCols = 2 + 2 * COMPETITIONS.length;
   const rows = sh.getRange(CFG.firstRow, 1, CFG.maxRows, nCols).getValues();
