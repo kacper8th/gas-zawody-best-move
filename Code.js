@@ -244,7 +244,7 @@ function rebuildResultsUnlocked_() {
     rows.push([meta.category]);
     fmt.push({ row: rows.length, kind: 'section' });
 
-    const header = ['Miejsce', 'Zawodnik', 'Nr', 'Waga [kg]'];
+    const header = ['Miejsce', 'Zawodnik', 'Waga [kg]'];
     const scoreCols = [];
     meta.comps.forEach(function (c) {
       const live = cfg.competitions.filter(function (k) { return k.key === c.key; })[0];
@@ -263,7 +263,7 @@ function rebuildResultsUnlocked_() {
 
     const firstBody = rows.length + 1;
     res.rows.forEach(function (a) {
-      const r = [a.place, a.name, a.nr, a.bw === null ? '' : a.bw];
+      const r = [a.place, a.name, a.bw === null ? '' : a.bw];
       a.comps.forEach(function (c) {
         r.push(c.best === null ? '' : c.best, c.score === null ? '' : c.score, c.place);
       });
@@ -303,7 +303,7 @@ function rebuildResultsUnlocked_() {
       sh.getRange(f.row, 2, f.count, 1).setHorizontalAlignment('left');
       sh.getRange(f.row, f.width, f.count, 1).setHorizontalAlignment('left').setFontColor('#666666');
       sh.getRange(f.row, 1, f.count, 1).setFontWeight('bold');
-      sh.getRange(f.row, 4, f.count, 1).setNumberFormat('0.0');
+      sh.getRange(f.row, 3, f.count, 1).setNumberFormat('0.0');
       f.scoreCols.forEach(function (col) {
         sh.getRange(f.row, col - 1, f.count, 1).setNumberFormat('0.0');
         sh.getRange(f.row, col, f.count, 1).setNumberFormat(scoreFmt);
