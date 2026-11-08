@@ -6,7 +6,7 @@
  *    próba spalona = 0,
  *  - w konkurencji lepszy wynik = lepsze miejsce; remis = to samo miejsce, kolejne miejsce przeskakuje (1, 1, 3),
  *  - punkty = suma miejsc ze wszystkich konkurencji, mniej punktów = wyżej,
- *  - zaznaczona wygrana dogrywka zawsze daje -0,5 pkt (ostrzeżenie o remisie pokazuje się dla miejsc 1-3).
+ *  - miejsce w dogrywce: 1 = -0,5 pkt, 2 = -0,33 pkt, 3 = -0,25 pkt (ostrzeżenie o remisie pokazuje się dla miejsc 1-3).
  */
 
 /** Układ listy startowej. Kolumny stałe: Nr, Imię, Nazwisko, Waga. */
@@ -14,7 +14,8 @@ const LIST = { titleRow: 1, groupRow: 2, headerRow: 3, firstRow: 4, maxRows: 200
 const META_KEY = 'zbm_lista';
 const PROP_LOCK_CONFIG = 'zbm_lock_config';
 const PROP_LOCK_ATHLETES = 'zbm_lock_athletes';
-const TIEBREAK_BONUS = -0.5;
+/** Bonus za miejsce w dogrywce. */
+const TIEBREAK_BONUS = { 1: -0.5, 2: -0.33, 3: -0.25 };
 const TIEBREAK_MAX_PLACE = 3;
 
 // ───────────────────────────── Menu ─────────────────────────────
@@ -75,7 +76,7 @@ function buildListSheet_(ss, cat, cfg) {
       groups.push(i === 1 ? c.name + ' [kg]' : '');
     }
   });
-  headers.push('Wygrana dogrywka');
+  headers.push('Dogrywka - miejsce');
   groups.push('Dogrywka');
   const tieCol = headers.length;
   const nCols = headers.length;
@@ -119,7 +120,10 @@ function buildListSheet_(ss, cat, cfg) {
   comps.forEach(function (c) {
     sh.getRange(r1, c.col, LIST.maxRows, c.attempts).setDataValidation(kgRule).setNumberFormat('0.0').setHorizontalAlignment('center');
   });
-  sh.getRange(r1, tieCol, LIST.maxRows, 1).insertCheckboxes();
+  sh.getRange(r1, tieCol, LIST.maxRows, 1).setHorizontalAlignment('center')
+    .setDataValidation(SpreadsheetApp.newDataValidation()
+      .requireValueInList(Object.keys(TIEBREAK_BONUS), true).setAllowInvalid(false)
+      .setHelpText('Miejsce w dogrywce: 1 = -0,5 pkt, 2 = -0,33 pkt, 3 = -0,25 pkt. Puste = bez dogrywki.').build());
 
   sh.getRange(LIST.groupRow, 1, lastRow - LIST.groupRow + 1, nCols)
     .setBorder(true, true, true, true, true, true, '#c0c7d4', SpreadsheetApp.BorderStyle.SOLID);
@@ -332,7 +336,7 @@ function readAthletes_(sheet, meta) {
       nr: r[0],
       name: (first + ' ' + last).trim(),
       bw: toNum_(r[LIST.weightCol - 1]),
-      tieWon: r[meta.tieCol - 1] === true,
+      tiePlace: toNum_(r[meta.tieCol - 1]),
       attempts: meta.comps.map(function (c) {
         return r.slice(c.col - 1, c.col - 1 + c.attempts).map(toNum_).filter(function (v) { return v !== null; });
       }),
@@ -343,7 +347,7 @@ function readAthletes_(sheet, meta) {
 
 /**
  * Liczy wyniki kategorii. Czysta funkcja (bez API arkusza) - łatwa do przetestowania.
- * athletes: [{ nr, name, bw, tieWon, attempts: [[kg, ...] per konkurencja] }]
+ * athletes: [{ nr, name, bw, tiePlace, attempts: [[kg, ...] per konkurencja] }]
  * refs: [{ refBodyweight, refWeight } per konkurencja]
  *
  * wynik = ciężar / waga^wsp * waga_ref^wsp / ciężar_ref
@@ -365,7 +369,7 @@ function computeRanking_(athletes, refs, coef, decimals) {
       const score = best !== null && a.bw ? round_(best / Math.pow(a.bw, coef) * factors[i], decimals) : null;
       comps.push({ best: best, score: score, place: null });
     }
-    return { nr: a.nr, name: a.name, bw: a.bw, tieWon: a.tieWon, comps: comps, notes: notes };
+    return { nr: a.nr, name: a.name, bw: a.bw, tiePlace: a.tiePlace, comps: comps, notes: notes };
   });
 
   // Miejsca w konkurencjach: większy wynik = lepiej; brak wyniku = na końcu.
@@ -380,10 +384,10 @@ function computeRanking_(athletes, refs, coef, decimals) {
     r.sum = r.comps.reduce(function (s, c) { return s + c.place; }, 0);
   });
 
-  // Dogrywka: zaznaczona wygrana zawsze daje -0,5 pkt.
+  // Dogrywka: miejsce 1/2/3 daje -0,5 / -0,33 / -0,25 pkt.
   rows.forEach(function (r) {
-    r.tiebreak = r.tieWon ? TIEBREAK_BONUS : 0;
-    r.points = r.sum + r.tiebreak;
+    r.tiebreak = TIEBREAK_BONUS[r.tiePlace] || 0;
+    r.points = round_(r.sum + r.tiebreak, 2);
   });
 
   const finalPlaces = competitionRank_(rows.map(function (r) { return r.points; }), false);
