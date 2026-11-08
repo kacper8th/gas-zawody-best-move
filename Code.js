@@ -167,6 +167,7 @@ function buildListSheet_(ss, cat, cfg) {
 
   // Nr jest liczony - chroniony zawsze (dla właściciela pilnuje tego onEdit).
   hardProtect_(sh.getRange(r1, LIST.nrCol, LIST.maxRows, 1).protect().setDescription('zbm:nr'));
+  protectListStatic_(sh); // wiersze 1-3 (nagłówki)
   if (getLockState_().athletes) protectAthletes_(sh);
   return sh;
 }
@@ -796,7 +797,7 @@ function toggleAthletesLock() {
   const props = PropertiesService.getDocumentProperties();
   const locked = getLockState_().athletes;
 
-  getListSheets_(ss).forEach(function (x) {
+  getAllListSheets_(ss).forEach(function (x) {
     if (locked) {
       removeProtections_(x.sheet, SpreadsheetApp.ProtectionType.RANGE, 'zbm:zawodnicy');
       props.deleteProperty(athletesSnapKey_(x.sheet));
