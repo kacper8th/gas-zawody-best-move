@@ -22,18 +22,27 @@ const CFG = {
   titleCell: 'B3',
   decimalsCell: 'B4',
   lockConfigCell: 'B5',
-  lockWeightsCell: 'B6',
+  lockAthletesCell: 'B6',
   headerRow: 8,
   firstRow: 9,
   maxRows: 20,
+  perComp: 4, // dla każdej konkurencji: czy jest, ilość prób, waga ref., ciężar ref.
 };
 
-/** Kategoria, współczynnik, potem dla każdej konkurencji: [czy jest, ilość prób]. */
+/** Kolumna (1-based) w tabeli kategorii: konkurencja i (0-based), pole offset 0-3. */
+function cfgCompCol_(i, offset) {
+  return 3 + CFG.perComp * i + offset;
+}
+
+/**
+ * Kategoria, współczynnik, potem dla każdej konkurencji:
+ * [czy jest, ilość prób, waga zawodnika ref. [kg], ciężar zawodnika ref. [kg]].
+ */
 const DEFAULT_CATEGORIES = [
-  ['Kobiety', 0.60, true, 3, true, 3],
-  ['Mężczyźni', 0.67, true, 3, true, 3],
-  ['Juniorzy - chłopcy', 0.67, false, 3, true, 3],
-  ['Juniorzy - dziewczęta', 0.60, false, 3, true, 3],
+  ['Kobiety', 0.60, true, 3, 65, 36, true, 3, 65, 48],
+  ['Mężczyźni', 0.67, true, 3, 85, 60, true, 3, 85, 80],
+  ['Juniorzy - chłopcy', 0.67, false, 3, 85, 60, true, 3, 85, 80],
+  ['Juniorzy - dziewczęta', 0.60, false, 3, 65, 36, true, 3, 65, 48],
 ];
 
 const DEFAULT_DECIMALS = 3;
@@ -71,7 +80,7 @@ function setupTemplate() {
 
 function buildConfigSheet_(ss) {
   const sh = ss.insertSheet(SHEET_CONFIG, 0);
-  const nCols = 2 + 2 * COMPETITIONS.length;
+  const nCols = 2 + CFG.perComp * COMPETITIONS.length;
 
   sh.getRange('A1').setValue('Konfiguracja zawodów').setFontSize(14).setFontWeight('bold');
 
@@ -79,7 +88,7 @@ function buildConfigSheet_(ss) {
     ['Nazwa zawodów'],
     ['Miejsca po przecinku (wynik)'],
     ['Blokada konfiguracji'],
-    ['Blokada wag'],
+    ['Blokada danych zawodników'],
   ]).setFontWeight('bold');
   sh.getRange(CFG.decimalsCell)
     .setValue(DEFAULT_DECIMALS)
@@ -91,7 +100,9 @@ function buildConfigSheet_(ss) {
   sh.getRange('B5:B6').setValues([[lockLabel_(false)], [lockLabel_(false)]]).setFontColor('#666666');
 
   const headers = ['Kategoria', 'Współczynnik (0-1)'];
-  COMPETITIONS.forEach(function (c) { headers.push(c.name, 'Próby - ' + c.short); });
+  COMPETITIONS.forEach(function (c) {
+    headers.push(c.name, 'Próby - ' + c.short, c.short + ' - waga zawodnika ref. [kg]', c.short + ' - ciężar ref. [kg]');
+  });
   sh.getRange(CFG.headerRow, 1, 1, nCols).setValues([headers])
     .setFontWeight('bold').setBackground('#d9e2f3').setWrap(true).setVerticalAlignment('middle');
 
@@ -99,12 +110,17 @@ function buildConfigSheet_(ss) {
   body(2).setNumberFormat('0.00').setDataValidation(SpreadsheetApp.newDataValidation()
     .requireNumberBetween(0, 1).setAllowInvalid(false)
     .setHelpText('Współczynnik od 0 do 1, np. 0,67').build());
+  const kgRule = SpreadsheetApp.newDataValidation()
+    .requireNumberGreaterThan(0).setAllowInvalid(false)
+    .setHelpText('Wartość w kg (dokładność 0,1)').build();
   COMPETITIONS.forEach(function (c, i) {
-    body(3 + 2 * i).insertCheckboxes().setHorizontalAlignment('center');
-    body(4 + 2 * i).setNumberFormat('0').setHorizontalAlignment('center')
+    body(cfgCompCol_(i, 0)).insertCheckboxes().setHorizontalAlignment('center');
+    body(cfgCompCol_(i, 1)).setNumberFormat('0').setHorizontalAlignment('center')
       .setDataValidation(SpreadsheetApp.newDataValidation()
         .requireNumberBetween(1, 10).setAllowInvalid(false)
         .setHelpText('Ilość prób: 1-10').build());
+    body(cfgCompCol_(i, 2)).setNumberFormat('0.0').setHorizontalAlignment('center').setDataValidation(kgRule);
+    body(cfgCompCol_(i, 3)).setNumberFormat('0.0').setHorizontalAlignment('center').setDataValidation(kgRule);
   });
 
   sh.getRange(CFG.firstRow, 1, DEFAULT_CATEGORIES.length, nCols).setValues(DEFAULT_CATEGORIES);
@@ -124,7 +140,7 @@ function readConfig_(ss) {
   const sh = ss.getSheetByName(SHEET_CONFIG);
   if (!sh) throw new Error('Brak zakładki „' + SHEET_CONFIG + '” - uruchom ⚙️ Setup → Zbuduj szablon.');
 
-  const nCols = 2 + 2 * COMPETITIONS.length;
+  const nCols = 2 + CFG.perComp * COMPETITIONS.length;
   const rows = sh.getRange(CFG.firstRow, 1, CFG.maxRows, nCols).getValues();
 
   const decRaw = sh.getRange(CFG.decimalsCell).getValue();
@@ -138,9 +154,15 @@ function readConfig_(ss) {
     if (!name) return;
     const comps = [];
     COMPETITIONS.forEach(function (c, i) {
-      if (r[2 + 2 * i] === true) {
-        const attempts = Math.round(Number(r[3 + 2 * i]));
-        comps.push({ key: c.key, name: c.name, short: c.short, attempts: attempts >= 1 ? attempts : 3 });
+      const col = function (offset) { return r[cfgCompCol_(i, offset) - 1]; };
+      if (col(0) === true) {
+        const attempts = Math.round(Number(col(1)));
+        comps.push({
+          key: c.key, name: c.name, short: c.short,
+          attempts: attempts >= 1 ? attempts : 3,
+          refBodyweight: col(2) === '' ? null : Number(col(2)),
+          refWeight: col(3) === '' ? null : Number(col(3)),
+        });
       }
     });
     categories.push({ name: name, coef: r[1] === '' ? NaN : Number(r[1]), comps: comps });

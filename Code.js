@@ -6,14 +6,14 @@
  *    próba spalona = 0,
  *  - w konkurencji lepszy wynik = lepsze miejsce; remis = to samo miejsce, kolejne miejsce przeskakuje (1, 1, 3),
  *  - punkty = suma miejsc ze wszystkich konkurencji, mniej punktów = wyżej,
- *  - remis w punktach na miejscach 1-3: zwycięzca dogrywki (zaznaczony na liście) dostaje −0,5 pkt.
+ *  - zaznaczona wygrana dogrywka zawsze daje -0,5 pkt (ostrzeżenie o remisie pokazuje się dla miejsc 1-3).
  */
 
-/** Układ listy startowej. Kolumny stałe: Nr, Imię, Nazwisko, Rok ur., Waga. */
-const LIST = { titleRow: 1, groupRow: 2, headerRow: 3, firstRow: 4, maxRows: 200, weightCol: 5, fixedCols: 5 };
+/** Układ listy startowej. Kolumny stałe: Nr, Imię, Nazwisko, Waga. */
+const LIST = { titleRow: 1, groupRow: 2, headerRow: 3, firstRow: 4, maxRows: 200, nrCol: 1, weightCol: 4, fixedCols: 4 };
 const META_KEY = 'zbm_lista';
 const PROP_LOCK_CONFIG = 'zbm_lock_config';
-const PROP_LOCK_WEIGHTS = 'zbm_lock_weights';
+const PROP_LOCK_ATHLETES = 'zbm_lock_athletes';
 const TIEBREAK_BONUS = -0.5;
 const TIEBREAK_MAX_PLACE = 3;
 
@@ -26,7 +26,7 @@ function buildZawodyMenu_(ui) {
     .addItem('Przelicz wyniki', 'rebuildResults')
     .addSeparator()
     .addItem(st.config ? '🔓 Odblokuj konfigurację' : '🔒 Zablokuj konfigurację', 'toggleConfigLock')
-    .addItem(st.weights ? '🔓 Odblokuj wagi' : '🔒 Zablokuj wagi', 'toggleWeightsLock')
+    .addItem(st.athletes ? '🔓 Odblokuj dane zawodników' : '🔒 Zablokuj dane zawodników', 'toggleAthletesLock')
     .addToUi();
 }
 
@@ -62,11 +62,14 @@ function buildListSheet_(ss, cat, cfg) {
   const index = results ? results.getIndex() - 1 : ss.getSheets().length;
   const sh = ss.insertSheet(listSheetName_(cat.name), index);
 
-  const headers = ['Nr', 'Imię', 'Nazwisko', 'Rok ur.', 'Waga [kg]'];
-  const groups = ['', 'Zawodnik', '', '', ''];
+  const headers = ['Nr', 'Imię', 'Nazwisko', 'Waga [kg]'];
+  const groups = ['', 'Zawodnik', '', ''];
   const comps = [];
   cat.comps.forEach(function (c) {
-    comps.push({ key: c.key, name: c.name, short: c.short, col: headers.length + 1, attempts: c.attempts });
+    comps.push({
+      key: c.key, name: c.name, short: c.short, col: headers.length + 1, attempts: c.attempts,
+      refBodyweight: c.refBodyweight, refWeight: c.refWeight,
+    });
     for (let i = 1; i <= c.attempts; i++) {
       headers.push('Próba ' + i);
       groups.push(i === 1 ? c.name + ' [kg]' : '');
@@ -89,6 +92,7 @@ function buildListSheet_(ss, cat, cfg) {
 
   sh.getRange(LIST.groupRow, 1, 1, nCols).setValues([groups])
     .setFontWeight('bold').setHorizontalAlignment('center').setBackground('#d9e2f3');
+  sh.getRange(LIST.groupRow, 2, 1, LIST.fixedCols - 1).merge();
   comps.forEach(function (c) {
     if (c.attempts > 1) sh.getRange(LIST.groupRow, c.col, 1, c.attempts).merge();
   });
@@ -98,8 +102,7 @@ function buildListSheet_(ss, cat, cfg) {
 
   // Numeracja od 1 - pojawia się, gdy wpisane jest imię lub nazwisko.
   const r1 = LIST.firstRow;
-  sh.getRange(r1, 1).setFormula(
-    '=ARRAYFORMULA(IF((B' + r1 + ':B' + lastRow + '&C' + r1 + ':C' + lastRow + ')<>"";ROW(B' + r1 + ':B' + lastRow + ')-' + (r1 - 1) + ';""))');
+  setNumberingFormula_(sh);
 
   const kgRule = SpreadsheetApp.newDataValidation()
     .requireNumberGreaterThanOrEqualTo(0).setAllowInvalid(false)
@@ -107,12 +110,8 @@ function buildListSheet_(ss, cat, cfg) {
   const weightRule = SpreadsheetApp.newDataValidation()
     .requireNumberGreaterThan(0).setAllowInvalid(false)
     .setHelpText('Waga zawodnika w kg (dokładność 0,1).').build();
-  const yearRule = SpreadsheetApp.newDataValidation()
-    .requireNumberBetween(1900, 2100).setAllowInvalid(false)
-    .setHelpText('Rok urodzenia (informacyjnie).').build();
 
-  sh.getRange(r1, 1, LIST.maxRows, 1).setHorizontalAlignment('center').setFontColor('#666666');
-  sh.getRange(r1, 4, LIST.maxRows, 1).setDataValidation(yearRule).setNumberFormat('0').setHorizontalAlignment('center');
+  sh.getRange(r1, LIST.nrCol, LIST.maxRows, 1).setHorizontalAlignment('center').setFontColor('#666666').setBackground('#f3f3f3');
   sh.getRange(r1, LIST.weightCol, LIST.maxRows, 1).setDataValidation(weightRule).setNumberFormat('0.0').setHorizontalAlignment('center');
   comps.forEach(function (c) {
     sh.getRange(r1, c.col, LIST.maxRows, c.attempts).setDataValidation(kgRule).setNumberFormat('0.0').setHorizontalAlignment('center');
@@ -125,19 +124,29 @@ function buildListSheet_(ss, cat, cfg) {
   sh.setColumnWidth(1, 45);
   sh.setColumnWidth(2, 140);
   sh.setColumnWidth(3, 160);
-  sh.setColumnWidth(4, 70);
-  sh.setColumnWidth(5, 85);
+  sh.setColumnWidth(4, 85);
   for (let c = LIST.fixedCols + 1; c < tieCol; c++) sh.setColumnWidth(c, 75);
   sh.setColumnWidth(tieCol, 95);
   sh.setFrozenRows(LIST.headerRow);
-  sh.setFrozenColumns(3);
+  sh.setFrozenColumns(LIST.fixedCols);
 
   sh.addDeveloperMetadata(META_KEY, JSON.stringify({
     category: cat.name, coef: cat.coef, comps: comps, tieCol: tieCol,
   }));
 
-  if (getLockState_().weights) protectWeights_(sh);
+  // Nr jest liczony - chroniony zawsze (dla właściciela pilnuje tego onEdit).
+  hardProtect_(sh.getRange(r1, LIST.nrCol, LIST.maxRows, 1).protect().setDescription('zbm:nr'));
+  if (getLockState_().athletes) protectAthletes_(sh);
   return sh;
+}
+
+/** Numeracja od 1 - pojawia się, gdy wpisane jest imię lub nazwisko. */
+function setNumberingFormula_(sh) {
+  const r1 = LIST.firstRow;
+  const lastRow = LIST.firstRow + LIST.maxRows - 1;
+  sh.getRange(r1, LIST.nrCol, LIST.maxRows, 1).clearContent();
+  sh.getRange(r1, LIST.nrCol).setFormula(
+    '=ARRAYFORMULA(IF((B' + r1 + ':B' + lastRow + '&C' + r1 + ':C' + lastRow + ')<>"";ROW(B' + r1 + ':B' + lastRow + ')-' + (r1 - 1) + ';""))');
 }
 
 function listSheetName_(category) {
@@ -167,7 +176,13 @@ function onEdit(e) {
   if (!e || !e.range) return;
   const sh = e.range.getSheet();
   if (sh.getName() === SHEET_RESULTS) return;
-  if (sh.getName() !== SHEET_CONFIG && !getListMeta_(sh)) return;
+  const isList = !!getListMeta_(sh);
+  if (sh.getName() !== SHEET_CONFIG && !isList) return;
+  // Ręczna zmiana w kolumnie Nr - przywróć automatyczną numerację.
+  if (isList && e.range.getColumn() <= LIST.nrCol && e.range.getLastRow() >= LIST.firstRow) {
+    setNumberingFormula_(sh);
+    sh.getParent().toast('Nr jest liczony automatycznie - nie można go zmieniać.', '🏋️ Zawody');
+  }
   try {
     rebuildResults();
   } catch (err) {
@@ -346,15 +361,9 @@ function computeRanking_(athletes, nComps, coef, decimals) {
     r.sum = r.comps.reduce(function (s, c) { return s + c.place; }, 0);
   });
 
-  // Dogrywka: tylko przy remisie w sumie miejsc na miejscach 1-3.
-  const rawPlaces = competitionRank_(rows.map(function (r) { return r.sum; }), false);
-  rows.forEach(function (r, k) {
-    const tied = rows.some(function (o, j) { return j !== k && o.sum === r.sum; });
-    r.tiebreak = 0;
-    if (r.tieWon) {
-      if (tied && rawPlaces[k] <= TIEBREAK_MAX_PLACE) r.tiebreak = TIEBREAK_BONUS;
-      else r.notes.push('dogrywka nie dotyczy (brak remisu na miejscach 1-' + TIEBREAK_MAX_PLACE + ')');
-    }
+  // Dogrywka: zaznaczona wygrana zawsze daje -0,5 pkt.
+  rows.forEach(function (r) {
+    r.tiebreak = r.tieWon ? TIEBREAK_BONUS : 0;
     r.points = r.sum + r.tiebreak;
   });
 
@@ -404,9 +413,9 @@ function toNum_(v) {
 function getLockState_() {
   try {
     const p = PropertiesService.getDocumentProperties();
-    return { config: p.getProperty(PROP_LOCK_CONFIG) === '1', weights: p.getProperty(PROP_LOCK_WEIGHTS) === '1' };
+    return { config: p.getProperty(PROP_LOCK_CONFIG) === '1', athletes: p.getProperty(PROP_LOCK_ATHLETES) === '1' };
   } catch (e) {
-    return { config: false, weights: false };
+    return { config: false, athletes: false };
   }
 }
 
@@ -430,28 +439,29 @@ function toggleConfigLock() {
   ss.toast(locked ? 'Konfiguracja odblokowana.' : 'Konfiguracja zablokowana.', '🏋️ Zawody');
 }
 
-function toggleWeightsLock() {
+/** Blokuje imię, nazwisko i wagę na wszystkich listach - nie da się dodać ani zmienić zawodnika. */
+function toggleAthletesLock() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const props = PropertiesService.getDocumentProperties();
-  const locked = getLockState_().weights;
+  const locked = getLockState_().athletes;
 
   getListSheets_(ss).forEach(function (x) {
-    if (locked) removeProtections_(x.sheet, SpreadsheetApp.ProtectionType.RANGE, 'zbm:waga');
-    else protectWeights_(x.sheet);
+    if (locked) removeProtections_(x.sheet, SpreadsheetApp.ProtectionType.RANGE, 'zbm:zawodnicy');
+    else protectAthletes_(x.sheet);
   });
-  props.setProperty(PROP_LOCK_WEIGHTS, locked ? '0' : '1');
+  props.setProperty(PROP_LOCK_ATHLETES, locked ? '0' : '1');
 
   const cfgSheet = ss.getSheetByName(SHEET_CONFIG);
   if (cfgSheet) {
-    try { cfgSheet.getRange(CFG.lockWeightsCell).setValue(lockLabel_(!locked)); } catch (e) { /* konfiguracja zablokowana dla tego użytkownika */ }
+    try { cfgSheet.getRange(CFG.lockAthletesCell).setValue(lockLabel_(!locked)); } catch (e) { /* konfiguracja zablokowana dla tego użytkownika */ }
   }
   buildMenus_();
-  ss.toast(locked ? 'Wagi odblokowane.' : 'Wagi zablokowane.', '🏋️ Zawody');
+  ss.toast(locked ? 'Dane zawodników odblokowane.' : 'Dane zawodników zablokowane.', '🏋️ Zawody');
 }
 
-function protectWeights_(sheet) {
-  removeProtections_(sheet, SpreadsheetApp.ProtectionType.RANGE, 'zbm:waga');
-  const p = sheet.getRange(LIST.firstRow, LIST.weightCol, LIST.maxRows, 1).protect().setDescription('zbm:waga');
+function protectAthletes_(sheet) {
+  removeProtections_(sheet, SpreadsheetApp.ProtectionType.RANGE, 'zbm:zawodnicy');
+  const p = sheet.getRange(LIST.firstRow, 2, LIST.maxRows, LIST.fixedCols - 1).protect().setDescription('zbm:zawodnicy');
   hardProtect_(p);
 }
 
