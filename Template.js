@@ -99,6 +99,8 @@ function buildMenus_() {
   buildZawodyMenu_(ui);
   ui.createMenu('🖨️ Druk')
     .addItem('Drukuj regulamin (PDF)', 'printRules')
+    .addItem('Drukuj listę zawodników (PDF)', 'printAthletes')
+    .addItem('Drukuj wyniki (PDF)', 'printResults')
     .addToUi();
 }
 
