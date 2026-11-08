@@ -75,7 +75,7 @@ function buildListSheet_(ss, cat, cfg) {
     });
     // Każda próba = 2 kolumny: ciężar [kg] i checkbox „Zal.” (zaliczona).
     for (let i = 1; i <= c.attempts; i++) {
-      headers.push('Próba ' + i, 'Zal.');
+      headers.push('Próba ' + i, ''); // nagłówek scalony nad [kg] i „Zal.”
       groups.push(i === 1 ? c.name + ' [kg]' : '', '');
     }
   });
@@ -133,6 +133,20 @@ function buildListSheet_(ss, cat, cfg) {
 
   sh.getRange(LIST.groupRow, 1, lastRow - LIST.groupRow + 1, nCols)
     .setBorder(true, true, true, true, true, true, '#c0c7d4', SpreadsheetApp.BorderStyle.SOLID);
+
+  // Wizualny podział: para [ciężar | Zal.] w ramce, konkurencje i dogrywka oddzielone grubą linią.
+  const H = LIST.headerRow, nBody = lastRow - LIST.headerRow + 1;
+  comps.forEach(function (c) {
+    for (let i = 0; i < c.attempts; i++) {
+      const col = c.col + 2 * i;
+      sh.getRange(H, col, 1, 2).merge();
+      sh.getRange(H, col, nBody, 2).setBorder(null, true, null, true, null, null, '#8896ab', SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+    }
+    sh.getRange(LIST.groupRow, c.col, nBody + 1, 2 * c.attempts)
+      .setBorder(null, true, null, true, null, null, '#1f4e79', SpreadsheetApp.BorderStyle.SOLID_THICK);
+  });
+  sh.getRange(LIST.groupRow, tieCol, nBody + 1, 1)
+    .setBorder(null, true, null, true, null, null, '#1f4e79', SpreadsheetApp.BorderStyle.SOLID_THICK);
 
   sh.setColumnWidth(1, 45);
   sh.setColumnWidth(2, 140);
@@ -259,15 +273,24 @@ function rebuildResultsUnlocked_() {
     rows.push([meta.category]);
     fmt.push({ row: rows.length, kind: 'section' });
 
+    // Wiersz grup (nazwa konkurencji nad jej 3 kolumnami, „Podsumowanie”) + nagłówki.
     const header = ['Miejsce', 'Zawodnik', 'Waga [kg]'];
+    const groupsRow = ['', '', ''];
+    const blocks = []; // [kolumna startowa, szerokość]
     const scoreCols = [];
     meta.comps.forEach(function (c) {
       const live = cfg.competitions.filter(function (k) { return k.key === c.key; })[0];
-      const short = (live || c).short;
-      header.push(short + ' - najlepsza [kg]', short + ' - wynik', short + ' - miejsce');
+      blocks.push([header.length + 1, 3]);
+      groupsRow.push((live || c).name, '', '');
+      header.push('Najlepsza [kg]', 'Wynik', 'Miejsce');
       scoreCols.push(header.length - 1);
     });
+    blocks.push([header.length + 1, 3]);
+    groupsRow.push('Podsumowanie', '', '');
     header.push('Suma miejsc', 'Dogrywka', 'Punkty', 'Uwagi');
+    rows.push(groupsRow);
+    const groupRowNo = rows.length;
+    fmt.push({ row: groupRowNo, kind: 'groups', blocks: blocks });
     rows.push(header);
     fmt.push({ row: rows.length, kind: 'header', width: header.length });
 
@@ -289,6 +312,8 @@ function rebuildResultsUnlocked_() {
       fmt.push({ row: firstBody, kind: 'body', count: res.rows.length, width: header.length, scoreCols: scoreCols });
     }
 
+    fmt.push({ row: groupRowNo, kind: 'separators', count: rows.length - groupRowNo + 1, blocks: blocks, width: header.length });
+
     res.unresolved.forEach(function (u) {
       rows.push(['', '⚠ Remis na miejscu ' + u.place + ': ' + u.names.join(', ') + ' - zaznacz zwycięzcę dogrywki na liście startowej.']);
       fmt.push({ row: rows.length, kind: 'warn' });
@@ -299,6 +324,7 @@ function rebuildResultsUnlocked_() {
   const width = rows.reduce(function (m, r) { return Math.max(m, r.length); }, 1);
   const grid = rows.map(function (r) { return r.concat(new Array(width - r.length).fill('')); });
 
+  sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).breakApart();
   sh.clear();
   if (sh.getMaxColumns() < width) sh.insertColumnsAfter(sh.getMaxColumns(), width - sh.getMaxColumns());
   if (sh.getMaxRows() < grid.length) sh.insertRowsAfter(sh.getMaxRows(), grid.length - sh.getMaxRows());
@@ -309,6 +335,18 @@ function rebuildResultsUnlocked_() {
     if (f.kind === 'info') sh.getRange(f.row, 1, 1, 2).setFontColor('#666666').setFontStyle('italic');
     if (f.kind === 'section') sh.getRange(f.row, 1).setFontSize(13).setFontWeight('bold');
     if (f.kind === 'warn') sh.getRange(f.row, 2).setFontColor('#c00000').setFontWeight('bold');
+    if (f.kind === 'groups') {
+      f.blocks.forEach(function (b) {
+        sh.getRange(f.row, b[0], 1, b[1]).merge()
+          .setFontWeight('bold').setHorizontalAlignment('center').setBackground('#1f4e79').setFontColor('#ffffff');
+      });
+    }
+    if (f.kind === 'separators') {
+      f.blocks.forEach(function (b) {
+        sh.getRange(f.row, b[0], f.count, b[1])
+          .setBorder(null, true, null, true, null, null, '#1f4e79', SpreadsheetApp.BorderStyle.SOLID_THICK);
+      });
+    }
     if (f.kind === 'header') {
       sh.getRange(f.row, 1, 1, f.width).setFontWeight('bold').setBackground('#d9e2f3').setWrap(true).setHorizontalAlignment('center');
     }
