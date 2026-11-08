@@ -23,10 +23,8 @@ const TIEBREAK_MAX_PLACE = 3;
 function buildZawodyMenu_(ui) {
   const st = getLockState_();
   ui.createMenu('🏋️ Zawody')
-    .addItem('Generuj listy startowe', 'generateStartLists')
     .addItem('Przelicz wyniki', 'rebuildResults')
     .addItem('✅ Walidacja zawodów', 'validateCompetition')
-    .addItem('🖨️ Drukuj regulamin (PDF)', 'printRules')
     .addSeparator()
     .addItem(st.config ? '🔓 Odblokuj konfigurację' : '🔒 Zablokuj konfigurację', 'toggleConfigLock')
     .addItem(st.athletes ? '🔓 Odblokuj dane zawodników' : '🔒 Zablokuj dane zawodników', 'toggleAthletesLock')
@@ -261,7 +259,7 @@ function rebuildResultsUnlocked_() {
 
   if (!lists.length) {
     rows.push(['']);
-    rows.push(['Brak list startowych - 🏋️ Zawody → Generuj listy startowe.']);
+    rows.push(['Brak list startowych - ⚙️ Setup → Generuj listy startowe.']);
     fmt.push({ row: rows.length, kind: 'info' });
   }
 

@@ -135,7 +135,7 @@ function buildRulesSheet_(ss) {
   parsed[parsed.length - 1].style = 'wyróżnienie';
 
   sh.getRange(RULES.headerRow, 1, 1, 2)
-    .setValues([['Styl (puste = automatycznie)', 'Treść regulaminu - wiersz = akapit. Wydruk: 🏋️ Zawody → Drukuj regulamin (PDF)']])
+    .setValues([['Styl (puste = automatycznie)', 'Treść regulaminu - wiersz = akapit. Wydruk: 🖨️ Druk → Drukuj regulamin (PDF)']])
     .setFontWeight('bold').setBackground('#d9e2f3').setWrap(true).setVerticalAlignment('middle');
 
   const n = parsed.length;

@@ -4,7 +4,7 @@
  * setupTemplate() jest idempotentna:
  *  - „Konfiguracja” (dane wpisywane przez Kacpra) - zakładana tylko, jeśli nie istnieje,
  *  - „Wyniki” (zakładka wyliczana) - przeliczana od nowa,
- *  - listy startowe tworzy się osobno: 🏋️ Zawody → Generuj listy startowe.
+ *  - listy startowe tworzy się osobno: ⚙️ Setup → Generuj listy startowe.
  */
 
 const SHEET_CONFIG = 'Konfiguracja';
@@ -94,8 +94,12 @@ function buildMenus_() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('⚙️ Setup')
     .addItem('Zbuduj szablon', 'setupTemplate')
+    .addItem('Generuj listy startowe', 'generateStartLists')
     .addToUi();
   buildZawodyMenu_(ui);
+  ui.createMenu('🖨️ Druk')
+    .addItem('Drukuj regulamin (PDF)', 'printRules')
+    .addToUi();
 }
 
 function setupTemplate() {
@@ -115,7 +119,7 @@ function setupTemplate() {
   });
 
   ss.setActiveSheet(ss.getSheetByName(SHEET_CONFIG));
-  ss.toast('Szablon zbudowany. Dalej: 🏋️ Zawody → Generuj listy startowe.', '⚙️ Setup', 8);
+  ss.toast('Szablon zbudowany. Dalej: ⚙️ Setup → Generuj listy startowe.', '⚙️ Setup', 8);
 }
 
 function buildConfigSheet_(ss) {
