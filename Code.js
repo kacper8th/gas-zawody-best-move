@@ -184,7 +184,21 @@ function onEdit(e) {
   const sh = e.range.getSheet();
   if (sh.getName() === SHEET_RESULTS) return;
   const isList = !!getListMeta_(sh);
-  if (sh.getName() !== SHEET_CONFIG && !isList) return;
+  const isConfig = sh.getName() === SHEET_CONFIG;
+  if (!isConfig && !isList) return;
+
+  // Blokady: ochrona Google nie działa na właściciela, więc ręczne zmiany w zablokowanych obszarach są cofane.
+  const st = getLockState_();
+  if (isConfig && st.config) {
+    if (restoreFromSnapshot_(sh, SNAP_CONFIG, e.range)) {
+      sh.getParent().toast('Konfiguracja jest zablokowana - zmiana cofnięta.', '🔒 Blokada');
+    }
+    return;
+  }
+  if (isList && st.athletes && restoreFromSnapshot_(sh, athletesSnapKey_(sh), e.range)) {
+    sh.getParent().toast('Dane zawodników są zablokowane - zmiana cofnięta.', '🔒 Blokada');
+  }
+
   // Ręczna zmiana w kolumnie Nr - przywróć automatyczną numerację.
   if (isList && e.range.getColumn() <= LIST.nrCol && e.range.getLastRow() >= LIST.firstRow) {
     setNumberingFormula_(sh);
@@ -451,10 +465,13 @@ function toggleConfigLock() {
 
   if (locked) {
     removeProtections_(sh, SpreadsheetApp.ProtectionType.SHEET, 'zbm:config');
-    sh.getRange(CFG.lockConfigCell).setValue(lockLabel_(false));
+    props.deleteProperty(SNAP_CONFIG);
     props.setProperty(PROP_LOCK_CONFIG, '0');
+    sh.getRange(CFG.lockConfigCell).setValue(lockLabel_(false));
   } else {
     sh.getRange(CFG.lockConfigCell).setValue(lockLabel_(true));
+    SpreadsheetApp.flush();
+    saveSnapshot_(sh, SNAP_CONFIG, configArea_(), false);
     hardProtect_(sh.protect().setDescription('zbm:config'));
     props.setProperty(PROP_LOCK_CONFIG, '1');
   }
@@ -469,14 +486,22 @@ function toggleAthletesLock() {
   const locked = getLockState_().athletes;
 
   getListSheets_(ss).forEach(function (x) {
-    if (locked) removeProtections_(x.sheet, SpreadsheetApp.ProtectionType.RANGE, 'zbm:zawodnicy');
-    else protectAthletes_(x.sheet);
+    if (locked) {
+      removeProtections_(x.sheet, SpreadsheetApp.ProtectionType.RANGE, 'zbm:zawodnicy');
+      props.deleteProperty(athletesSnapKey_(x.sheet));
+    } else {
+      protectAthletes_(x.sheet);
+    }
   });
   props.setProperty(PROP_LOCK_ATHLETES, locked ? '0' : '1');
 
   const cfgSheet = ss.getSheetByName(SHEET_CONFIG);
   if (cfgSheet) {
-    try { cfgSheet.getRange(CFG.lockAthletesCell).setValue(lockLabel_(!locked)); } catch (e) { /* konfiguracja zablokowana dla tego użytkownika */ }
+    try {
+      cfgSheet.getRange(CFG.lockAthletesCell).setValue(lockLabel_(!locked));
+      // Konfiguracja zablokowana - odśwież jej zapamiętany stan, żeby nie cofać nowego statusu.
+      if (getLockState_().config) { SpreadsheetApp.flush(); saveSnapshot_(cfgSheet, SNAP_CONFIG, configArea_(), false); }
+    } catch (e) { /* konfiguracja zablokowana dla tego użytkownika */ }
   }
   buildMenus_();
   ss.toast(locked ? 'Dane zawodników odblokowane.' : 'Dane zawodników zablokowane.', '🏋️ Zawody');
@@ -484,8 +509,77 @@ function toggleAthletesLock() {
 
 function protectAthletes_(sheet) {
   removeProtections_(sheet, SpreadsheetApp.ProtectionType.RANGE, 'zbm:zawodnicy');
-  const p = sheet.getRange(LIST.firstRow, 2, LIST.maxRows, LIST.fixedCols - 1).protect().setDescription('zbm:zawodnicy');
+  const a = athletesArea_();
+  const p = sheet.getRange(a.row, a.col, a.rows, a.cols).protect().setDescription('zbm:zawodnicy');
   hardProtect_(p);
+  saveSnapshot_(sheet, athletesSnapKey_(sheet), a, true);
+}
+
+// ── Zapamiętany stan zablokowanych obszarów (do cofania zmian w onEdit) ──
+
+const SNAP_CONFIG = 'zbm_snap_config';
+
+function athletesSnapKey_(sheet) {
+  return 'zbm_snap_ath_' + sheet.getSheetId();
+}
+
+/** Imię, Nazwisko, Waga na liście startowej. */
+function athletesArea_() {
+  return { row: LIST.firstRow, col: 2, rows: LIST.maxRows, cols: LIST.fixedCols - 1 };
+}
+
+/** Cała część zakładki Konfiguracja z ustawieniami i tabelami. */
+function configArea_() {
+  const n = COMPETITIONS.length;
+  return { row: 1, col: 1, rows: CFG.refFirstRow + CFG.maxRows, cols: Math.max(2 + 2 * n, 1 + 2 * n, CFG.compShortCol) };
+}
+
+/** Zapisuje wartości (formuły jako tekst formuły) obszaru do właściwości dokumentu. */
+function saveSnapshot_(sheet, key, area, trimEmptyRows) {
+  const range = sheet.getRange(area.row, area.col, area.rows, area.cols);
+  const formulas = range.getFormulas();
+  const cells = range.getValues().map(function (row, i) {
+    return row.map(function (v, j) { return formulas[i][j] || v; });
+  });
+  if (trimEmptyRows) {
+    while (cells.length && cells[cells.length - 1].every(function (v) { return v === ''; })) cells.pop();
+  }
+  const snap = { row: area.row, col: area.col, rows: area.rows, cols: area.cols, cells: cells };
+  PropertiesService.getDocumentProperties().setProperty(key, JSON.stringify(snap));
+}
+
+/** Przywraca zapamiętany stan w części edytowanego zakresu, która należy do obszaru. Zwraca true, jeśli coś cofnięto. */
+function restoreFromSnapshot_(sheet, key, edited) {
+  const raw = PropertiesService.getDocumentProperties().getProperty(key);
+  if (!raw) return false;
+  const snap = JSON.parse(raw);
+  const box = intersect_(
+    { r1: edited.getRow(), r2: edited.getLastRow(), c1: edited.getColumn(), c2: edited.getLastColumn() },
+    { r1: snap.row, r2: snap.row + snap.rows - 1, c1: snap.col, c2: snap.col + snap.cols - 1 });
+  if (!box) return false;
+  sheet.getRange(box.r1, box.c1, box.r2 - box.r1 + 1, box.c2 - box.c1 + 1).setValues(snapshotCells_(snap, box));
+  return true;
+}
+
+/** Część wspólna dwóch prostokątów {r1, r2, c1, c2} albo null. */
+function intersect_(a, b) {
+  const box = { r1: Math.max(a.r1, b.r1), r2: Math.min(a.r2, b.r2), c1: Math.max(a.c1, b.c1), c2: Math.min(a.c2, b.c2) };
+  return box.r1 <= box.r2 && box.c1 <= box.c2 ? box : null;
+}
+
+/** Wartości ze snapshotu dla prostokąta (wiersze poza zapamiętanymi = puste). */
+function snapshotCells_(snap, box) {
+  const out = [];
+  for (let r = box.r1; r <= box.r2; r++) {
+    const src = snap.cells[r - snap.row] || [];
+    const row = [];
+    for (let c = box.c1; c <= box.c2; c++) {
+      const v = src[c - snap.col];
+      row.push(v === undefined || v === null ? '' : v);
+    }
+    out.push(row);
+  }
+  return out;
 }
 
 function hardProtect_(protection) {
