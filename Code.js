@@ -241,7 +241,7 @@ function rebuildResultsUnlocked_() {
     const res = computeRanking_(athletes, refs, coef, cfg.decimals);
 
     rows.push(['']);
-    rows.push([meta.category + '   (współczynnik ' + coef + ')']);
+    rows.push([meta.category]);
     fmt.push({ row: rows.length, kind: 'section' });
 
     const header = ['Miejsce', 'Zawodnik', 'Nr', 'Waga [kg]'];
