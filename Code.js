@@ -241,7 +241,8 @@ function onEdit(e) {
 
   // Blokady: ochrona Google nie działa na właściciela, więc ręczne zmiany w zablokowanych obszarach są cofane.
   const st = getLockState_();
-  if (isConfig && st.config) {
+  const isAutoCell = isConfig && e.range.getA1Notation() === CFG.autoCell;
+  if (isConfig && st.config && !isAutoCell) {
     if (restoreFromSnapshot_(sh, SNAP_CONFIG, e.range)) {
       sh.getParent().toast('Konfiguracja jest zablokowana - zmiana cofnięta.', '🔒 Blokada');
     }
@@ -256,11 +257,25 @@ function onEdit(e) {
     setNumberingFormula_(sh);
     sh.getParent().toast('Nr jest liczony automatycznie - nie można go zmieniać.', '🏋️ Zawody');
   }
+
+  // Automatyczne przeliczanie wyłączone - tylko oznacz Wyniki jako nieaktualne (szybkie).
+  if (!isAutoRecalc_(sh.getParent())) {
+    markResultsStale_(sh.getParent());
+    return;
+  }
   try {
     rebuildResults();
   } catch (err) {
     console.error(err);
   }
+}
+
+/** Ostrzeżenie w Wynikach, że dane zmieniły się od ostatniego przeliczenia. */
+function markResultsStale_(ss) {
+  const res = ss.getSheetByName(SHEET_RESULTS);
+  if (!res) return;
+  res.getRange(2, 1).setValue('⚠ Wyniki nieaktualne - dane zmieniły się od ostatniego przeliczenia. 🏋️ Zawody → Przelicz wyniki')
+    .setFontColor('#c00000').setFontStyle('normal').setFontWeight('bold');
 }
 
 function rebuildResults() {
@@ -734,7 +749,8 @@ function toggleConfigLock() {
     sh.getRange(CFG.lockConfigCell).setValue(lockLabel_(true));
     SpreadsheetApp.flush();
     saveSnapshot_(sh, SNAP_CONFIG, configArea_(), false);
-    hardProtect_(sh.protect().setDescription('zbm:config'));
+    const p = hardProtect_(sh.protect().setDescription('zbm:config'));
+    p.setUnprotectedRanges([sh.getRange(CFG.autoCell)]); // przełącznik przeliczania zawsze dostępny
     props.setProperty(PROP_LOCK_CONFIG, '1');
   }
   buildMenus_();

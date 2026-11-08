@@ -23,6 +23,7 @@ const CFG = {
   decimalsCell: 'B4',
   lockConfigCell: 'B5',
   lockAthletesCell: 'B6',
+  autoCell: 'B7', // checkbox „Przeliczaj wyniki automatycznie” - działa także przy zablokowanej konfiguracji
   // Tabela nazw konkurencji (D3:F5): etykieta, nazwa, skrót - wiersz na konkurencję w kolejności COMPETITIONS.
   compHeaderRow: 3,
   compFirstRow: 4,
@@ -130,6 +131,7 @@ function setupTemplate() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   if (!ss.getSheetByName(SHEET_CONFIG)) buildConfigSheet_(ss);
+  else ensureConfigAutoRow_(ss.getSheetByName(SHEET_CONFIG)); // dopisanie nowych ustawień do istniejącej konfiguracji
   if (!ss.getSheetByName(SHEET_RESULTS)) createResultsSheet_(ss);
   if (!ss.getSheetByName(SHEET_RULES)) buildRulesSheet_(ss);
   rebuildResults();
@@ -177,6 +179,7 @@ function buildConfigSheet_(ss) {
       .requireNumberBetween(0, 6).setAllowInvalid(false)
       .setHelpText('Liczba całkowita 0-6').build());
   sh.getRange('B5:B6').setValues([[lockLabel_(false)], [lockLabel_(false)]]).setFontColor('#666666');
+  ensureConfigAutoRow_(sh);
 
   // ── Nazwy konkurencji ──
   headerStyle(sh.getRange(CFG.compHeaderRow, CFG.compLabelCol, 1, 3).setValues([['Konkurencja', 'Nazwa konkurencji', 'Skrót']]));
@@ -258,6 +261,20 @@ function buildConfigSheet_(ss) {
   sh.setColumnWidth(1, 300);
   for (let c = 2; c <= Math.max(nCols, nRefCols, CFG.compShortCol); c++) sh.setColumnWidth(c, 130);
   return sh;
+}
+
+/** Wiersz „Przeliczaj wyniki automatycznie” (A7:B7) - dopisywany, jeśli go brak (bez ruszania reszty). */
+function ensureConfigAutoRow_(sh) {
+  const label = sh.getRange('A7');
+  if (String(label.getValue()).trim()) return;
+  label.setValue('Przeliczaj wyniki automatycznie').setFontWeight('bold');
+  sh.getRange(CFG.autoCell).insertCheckboxes().setValue(true).setHorizontalAlignment('left');
+}
+
+/** Czy wyniki mają się przeliczać po każdej edycji (puste = tak). */
+function isAutoRecalc_(ss) {
+  const sh = ss.getSheetByName(SHEET_CONFIG);
+  return !sh || sh.getRange(CFG.autoCell).getValue() !== false;
 }
 
 /** Odczytuje konfigurację zawodów. Referencje łączone z kategoriami po nazwie. */
