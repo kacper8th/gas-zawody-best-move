@@ -75,7 +75,8 @@ function detailsLayout_(title, stamp, collected, competitions) {
           rows.push(r);
         });
         fmt.push({ row: first, kind: 'body', count: sorted.length, width: width, bestCol: width - 1, scoreCol: width,
-          places: sorted.map(function (a) { return a.comps[ci].place; }) });
+          // Kolor podium tylko dla zawodników z wynikiem (bez wyniku = 0 = bez koloru).
+          places: sorted.map(function (a) { return a.comps[ci].score === null ? 0 : a.comps[ci].place; }) });
       }
       rows.push(['']);
     });

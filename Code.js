@@ -368,7 +368,9 @@ function rebuildResultsUnlocked_() {
       rows.push(r);
     });
     if (res.rows.length) {
-      fmt.push({ row: firstBody, kind: 'body', count: res.rows.length, width: header.length, scoreCols: scoreCols });
+      fmt.push({ row: firstBody, kind: 'body', count: res.rows.length, width: header.length, scoreCols: scoreCols,
+        // Kolor podium tylko dla zawodników z jakimkolwiek wynikiem.
+        podium: res.rows.map(function (a) { return a.comps.some(function (c) { return c.score !== null; }) ? a.place : 0; }) });
     }
 
     fmt.push({ row: groupRowNo, kind: 'separators', count: rows.length - groupRowNo + 1, blocks: blocks, width: header.length });
@@ -424,10 +426,9 @@ function rebuildResultsUnlocked_() {
       body.setBorder(true, true, true, true, true, true, '#c0c7d4', SpreadsheetApp.BorderStyle.SOLID);
       // Podium.
       const podium = ['#fff2cc', '#eeeeee', '#fce5cd'];
-      for (let i = 0; i < f.count; i++) {
-        const place = grid[f.row - 1 + i][0];
+      f.podium.forEach(function (place, i) {
         if (place >= 1 && place <= 3) sh.getRange(f.row + i, 1, 1, f.width).setBackground(podium[place - 1]);
-      }
+      });
     }
   });
 
