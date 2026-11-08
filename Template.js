@@ -119,6 +119,7 @@ function buildMenus_() {
   ui.createMenu('⚙️ Setup')
     .addItem('Zbuduj szablon', 'setupTemplate')
     .addItem('Generuj listy startowe', 'generateStartLists')
+    .addItem('Napraw listy startowe', 'repairStartLists')
     .addToUi();
   buildZawodyMenu_(ui);
   ui.createMenu('🖨️ Druk')
@@ -137,6 +138,7 @@ function setupTemplate() {
   else upgradeConfigSheet_(ss.getSheetByName(SHEET_CONFIG)); // dopisanie nowych ustawień do istniejącej konfiguracji
   if (!ss.getSheetByName(SHEET_RESULTS)) createResultsSheet_(ss);
   applyStaticProtections_(ss); // ochrona nagłówków, etykiet i opisów (także w istniejących zakładkach)
+  repairAllLists_(ss);          // checkboxy, reguły, formaty i ramki list (dane bez zmian)
   rebuildResults();
 
   // Domyślna pusta zakładka nowego arkusza - usuwana tylko, gdy naprawdę pusta.

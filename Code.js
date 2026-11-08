@@ -113,42 +113,15 @@ function buildListSheet_(ss, cat, cfg) {
   const r1 = LIST.firstRow;
   setNumberingFormula_(sh);
 
-  const kgRule = SpreadsheetApp.newDataValidation()
-    .requireNumberGreaterThanOrEqualTo(0).setAllowInvalid(false)
-    .setHelpText('Ciężar w kg (dokładność 0,1). Próba zaliczona = zaznacz „Zal.” obok. Spalona o nieznanym ciężarze = 0.').build();
-  const weightRule = SpreadsheetApp.newDataValidation()
-    .requireNumberGreaterThan(0).setAllowInvalid(false)
-    .setHelpText('Waga zawodnika w kg (dokładność 0,1).').build();
-
+  const layoutMeta = { layout: 2, comps: comps, tieCol: tieCol, notesCol: notesCol };
   sh.getRange(r1, LIST.nrCol, LIST.maxRows, 1).setHorizontalAlignment('center').setFontColor('#666666').setBackground('#f3f3f3');
-  sh.getRange(r1, LIST.weightCol, LIST.maxRows, 1).setDataValidation(weightRule).setNumberFormat('0.0').setHorizontalAlignment('center');
-  comps.forEach(function (c) {
-    for (let i = 0; i < c.attempts; i++) {
-      sh.getRange(r1, c.col + 2 * i, LIST.maxRows, 1).setDataValidation(kgRule).setNumberFormat('0.0').setHorizontalAlignment('center');
-      sh.getRange(r1, c.col + 2 * i + 1, LIST.maxRows, 1).insertCheckboxes();
-    }
-  });
-  sh.getRange(r1, tieCol, LIST.maxRows, 1).setHorizontalAlignment('center')
-    .setDataValidation(SpreadsheetApp.newDataValidation()
-      .requireValueInList(Object.keys(TIEBREAK_BONUS), true).setAllowInvalid(false)
-      .setHelpText('Miejsce w dogrywce: 1 = -0,5 pkt, 2 = -0,33 pkt, 3 = -0,25 pkt. Puste = bez dogrywki.').build());
+  applyListRules_(sh, layoutMeta, r1, LIST.maxRows);
 
-  sh.getRange(LIST.groupRow, 1, lastRow - LIST.groupRow + 1, nCols)
-    .setBorder(true, true, true, true, true, true, '#c0c7d4', SpreadsheetApp.BorderStyle.SOLID);
-
-  // Wizualny podział: para [ciężar | Zal.] w ramce, konkurencje i dogrywka oddzielone grubą linią.
-  const H = LIST.headerRow, nBody = lastRow - LIST.headerRow + 1;
+  // Scalone nagłówki „Próba N” nad [ciężar | Zal.]; ramki i grube linie - applyListBorders_.
   comps.forEach(function (c) {
-    for (let i = 0; i < c.attempts; i++) {
-      const col = c.col + 2 * i;
-      sh.getRange(H, col, 1, 2).merge();
-      sh.getRange(H, col, nBody, 2).setBorder(null, true, null, true, null, null, '#8896ab', SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
-    }
-    sh.getRange(LIST.groupRow, c.col, nBody + 1, 2 * c.attempts)
-      .setBorder(null, true, null, true, null, null, '#1f4e79', SpreadsheetApp.BorderStyle.SOLID_THICK);
+    for (let i = 0; i < c.attempts; i++) sh.getRange(LIST.headerRow, c.col + 2 * i, 1, 2).merge();
   });
-  sh.getRange(LIST.groupRow, tieCol, nBody + 1, 1)
-    .setBorder(null, true, null, true, null, null, '#1f4e79', SpreadsheetApp.BorderStyle.SOLID_THICK);
+  applyListBorders_(sh, layoutMeta);
 
   sh.setColumnWidth(1, 45);
   sh.setColumnWidth(2, 140);
@@ -157,7 +130,6 @@ function buildListSheet_(ss, cat, cfg) {
   for (let c = LIST.fixedCols + 1; c < tieCol; c++) sh.setColumnWidth(c, (c - LIST.fixedCols) % 2 ? 65 : 38);
   sh.setColumnWidth(tieCol, 95);
   sh.setColumnWidth(notesCol, 220);
-  sh.getRange(LIST.firstRow, notesCol, LIST.maxRows, 1).setWrap(true);
   sh.setFrozenRows(LIST.headerRow);
   sh.setFrozenColumns(LIST.fixedCols);
 
@@ -261,6 +233,11 @@ function onEdit(e) {
     if (r === 'skipped') {
       sh.getParent().toast('Kolejność listy różni się od stanu z blokady - zmiany nie cofnięto. Użyj 🏋️ Zawody → Przywróć dane zawodników z blokady.', '🔒 Blokada', 10);
     }
+  }
+
+  // Skasowany checkbox / reguła (Delete, wklejenie komórek) - przywróć w edytowanych wierszach.
+  if (isList) {
+    try { repairEditedList_(sh, getListMeta_(sh), e.range); } catch (err) { console.error(err); }
   }
 
   // Ręczna zmiana w kolumnie Nr - przywróć automatyczną numerację.
