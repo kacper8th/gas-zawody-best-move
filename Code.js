@@ -797,7 +797,7 @@ function toggleAthletesLock() {
   const props = PropertiesService.getDocumentProperties();
   const locked = getLockState_().athletes;
 
-  getListSheets_(ss).forEach(function (x) {
+  getAllListSheets_(ss).forEach(function (x) {
     if (locked) {
       removeProtections_(x.sheet, SpreadsheetApp.ProtectionType.RANGE, 'zbm:zawodnicy');
       props.deleteProperty(athletesSnapKey_(x.sheet));

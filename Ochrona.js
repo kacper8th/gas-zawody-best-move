@@ -74,4 +74,20 @@ function applyStaticProtections_(ss) {
   getAllListSheets_(ss).forEach(function (x) { protectListStatic_(x.sheet); });
   const rules = ss.getSheetByName(SHEET_RULES);
   if (rules) protectRulesStatic_(rules);
+  syncLockProtections_(ss);
+}
+
+/**
+ * Ochrony blokad zgodne z faktycznym stanem blokad - usuwa „osierocone” ochrony
+ * (np. lista wygenerowana przy włączonej blokadzie, która później została wyłączona).
+ */
+function syncLockProtections_(ss) {
+  const st = getLockState_();
+  if (!st.athletes) {
+    getAllListSheets_(ss).forEach(function (x) {
+      removeProtections_(x.sheet, SpreadsheetApp.ProtectionType.RANGE, 'zbm:zawodnicy');
+    });
+  }
+  const cfg = ss.getSheetByName(SHEET_CONFIG);
+  if (cfg && !st.config) removeProtections_(cfg, SpreadsheetApp.ProtectionType.SHEET, 'zbm:config');
 }
