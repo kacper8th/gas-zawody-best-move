@@ -25,6 +25,7 @@ function buildZawodyMenu_(ui) {
   ui.createMenu('🏋️ Zawody')
     .addItem('Generuj listy startowe', 'generateStartLists')
     .addItem('Przelicz wyniki', 'rebuildResults')
+    .addItem('✅ Walidacja zawodów', 'validateCompetition')
     .addItem('🖨️ Drukuj regulamin (PDF)', 'printRules')
     .addSeparator()
     .addItem(st.config ? '🔓 Odblokuj konfigurację' : '🔒 Zablokuj konfigurację', 'toggleConfigLock')
@@ -72,9 +73,10 @@ function buildListSheet_(ss, cat, cfg) {
       key: c.key, name: c.name, short: c.short, col: headers.length + 1, attempts: c.attempts,
       refBodyweight: c.refBodyweight, refWeight: c.refWeight,
     });
+    // Każda próba = 2 kolumny: ciężar [kg] i checkbox „Zal.” (zaliczona).
     for (let i = 1; i <= c.attempts; i++) {
-      headers.push('Próba ' + i);
-      groups.push(i === 1 ? c.name + ' [kg]' : '');
+      headers.push('Próba ' + i, 'Zal.');
+      groups.push(i === 1 ? c.name + ' [kg]' : '', '');
     }
   });
   headers.push('Dogrywka - miejsce');
@@ -96,7 +98,7 @@ function buildListSheet_(ss, cat, cfg) {
     .setFontWeight('bold').setHorizontalAlignment('center').setBackground('#d9e2f3');
   sh.getRange(LIST.groupRow, 2, 1, LIST.fixedCols - 1).merge();
   comps.forEach(function (c) {
-    if (c.attempts > 1) sh.getRange(LIST.groupRow, c.col, 1, c.attempts).merge();
+    sh.getRange(LIST.groupRow, c.col, 1, 2 * c.attempts).merge();
     // Nazwa konkurencji z konfiguracji - zmiana nazwy od razu widoczna na liście.
     const idx = COMPETITIONS.map(function (k) { return k.key; }).indexOf(c.key);
     sh.getRange(LIST.groupRow, c.col).setFormula('=' + compCellA1_(idx, 'name', true) + '&" [kg]"');
@@ -111,7 +113,7 @@ function buildListSheet_(ss, cat, cfg) {
 
   const kgRule = SpreadsheetApp.newDataValidation()
     .requireNumberGreaterThanOrEqualTo(0).setAllowInvalid(false)
-    .setHelpText('Ciężar w kg (dokładność 0,1). Spalona próba = 0.').build();
+    .setHelpText('Ciężar w kg (dokładność 0,1). Próba zaliczona = zaznacz „Zal.” obok.').build();
   const weightRule = SpreadsheetApp.newDataValidation()
     .requireNumberGreaterThan(0).setAllowInvalid(false)
     .setHelpText('Waga zawodnika w kg (dokładność 0,1).').build();
@@ -119,7 +121,10 @@ function buildListSheet_(ss, cat, cfg) {
   sh.getRange(r1, LIST.nrCol, LIST.maxRows, 1).setHorizontalAlignment('center').setFontColor('#666666').setBackground('#f3f3f3');
   sh.getRange(r1, LIST.weightCol, LIST.maxRows, 1).setDataValidation(weightRule).setNumberFormat('0.0').setHorizontalAlignment('center');
   comps.forEach(function (c) {
-    sh.getRange(r1, c.col, LIST.maxRows, c.attempts).setDataValidation(kgRule).setNumberFormat('0.0').setHorizontalAlignment('center');
+    for (let i = 0; i < c.attempts; i++) {
+      sh.getRange(r1, c.col + 2 * i, LIST.maxRows, 1).setDataValidation(kgRule).setNumberFormat('0.0').setHorizontalAlignment('center');
+      sh.getRange(r1, c.col + 2 * i + 1, LIST.maxRows, 1).insertCheckboxes();
+    }
   });
   sh.getRange(r1, tieCol, LIST.maxRows, 1).setHorizontalAlignment('center')
     .setDataValidation(SpreadsheetApp.newDataValidation()
@@ -133,13 +138,13 @@ function buildListSheet_(ss, cat, cfg) {
   sh.setColumnWidth(2, 140);
   sh.setColumnWidth(3, 160);
   sh.setColumnWidth(4, 85);
-  for (let c = LIST.fixedCols + 1; c < tieCol; c++) sh.setColumnWidth(c, 75);
+  for (let c = LIST.fixedCols + 1; c < tieCol; c++) sh.setColumnWidth(c, (c - LIST.fixedCols) % 2 ? 65 : 38);
   sh.setColumnWidth(tieCol, 95);
   sh.setFrozenRows(LIST.headerRow);
   sh.setFrozenColumns(LIST.fixedCols);
 
   sh.addDeveloperMetadata(META_KEY, JSON.stringify({
-    category: cat.name, coef: cat.coef, comps: comps, tieCol: tieCol,
+    layout: 2, category: cat.name, coef: cat.coef, comps: comps, tieCol: tieCol,
   }));
 
   // Nr jest liczony - chroniony zawsze (dla właściciela pilnuje tego onEdit).
@@ -248,16 +253,7 @@ function rebuildResultsUnlocked_() {
 
   lists.forEach(function (x) {
     const meta = x.meta;
-    const cfgCat = cfg.categories.filter(function (c) { return c.name === meta.category; })[0];
-    const coef = cfgCat && cfgCat.coef >= 0 && cfgCat.coef <= 1 ? cfgCat.coef : meta.coef;
-
-    const athletes = readAthletes_(x.sheet, meta);
-    // Referencje z bieżącej konfiguracji (jak współczynnik); gdy kategorii już nie ma - z chwili generowania listy.
-    const refs = meta.comps.map(function (c) {
-      const live = cfgCat && cfgCat.comps.filter(function (k) { return k.key === c.key; })[0];
-      return live || c;
-    });
-    const res = computeRanking_(athletes, refs, coef, cfg.decimals);
+    const res = categoryResult_(cfg, x.sheet, meta);
 
     rows.push(['']);
     rows.push([meta.category]);
@@ -340,6 +336,28 @@ function rebuildResultsUnlocked_() {
 }
 
 /** Czyta zawodników z listy startowej (pomija puste wiersze). */
+/** Wynik kategorii: współczynnik i referencje z bieżącej konfiguracji (gdy kategorii już nie ma - z chwili generowania listy). */
+function categoryResult_(cfg, sheet, meta) {
+  const cfgCat = cfg.categories.filter(function (c) { return c.name === meta.category; })[0];
+  const coef = cfgCat && cfgCat.coef >= 0 && cfgCat.coef <= 1 ? cfgCat.coef : meta.coef;
+  const refs = meta.comps.map(function (c) {
+    const live = cfgCat && cfgCat.comps.filter(function (k) { return k.key === c.key; })[0];
+    return live || c;
+  });
+  return computeRanking_(readAthletes_(sheet, meta), refs, coef, cfg.decimals);
+}
+
+/** Próby konkurencji z wiersza listy: [{ kg, ok, col }]. Stary układ (bez „Zal.”) = każda wpisana próba zaliczona. */
+function readAttempts_(row, c, meta) {
+  const out = [];
+  for (let i = 0; i < c.attempts; i++) {
+    const col = meta.layout === 2 ? c.col + 2 * i : c.col + i;
+    out.push({ kg: toNum_(row[col - 1]), ok: meta.layout === 2 ? row[col] === true : true, col: col });
+  }
+  return out;
+}
+
+/** Czyta zawodników z listy startowej (pomija puste wiersze). Do wyniku liczą się tylko próby zaliczone. */
 function readAthletes_(sheet, meta) {
   const values = sheet.getRange(LIST.firstRow, 1, LIST.maxRows, meta.tieCol).getValues();
   const out = [];
@@ -353,11 +371,104 @@ function readAthletes_(sheet, meta) {
       bw: toNum_(r[LIST.weightCol - 1]),
       tiePlace: toNum_(r[meta.tieCol - 1]),
       attempts: meta.comps.map(function (c) {
-        return r.slice(c.col - 1, c.col - 1 + c.attempts).map(toNum_).filter(function (v) { return v !== null; });
+        return readAttempts_(r, c, meta)
+          .filter(function (a) { return a.ok && a.kg !== null; })
+          .map(function (a) { return a.kg; });
       }),
     });
   });
   return out;
+}
+
+// ───────────────────────────── Walidacja ─────────────────────────────
+
+/**
+ * Sprawdza listy startowe: brak wagi, puste próby, próba lżejsza od poprzedniej, zaliczona bez ciężaru,
+ * nierozstrzygnięte remisy na podium. Błędne komórki podświetla na czerwono.
+ */
+function validateCompetition() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  const cfg = readConfig_(ss);
+  const lists = getListSheets_(ss);
+  const errors = [], warnings = [];
+  const BAD = '#f4cccc';
+
+  if (!lists.length) {
+    ui.alert('Walidacja zawodów', 'Brak list startowych.', ui.ButtonSet.OK);
+    return;
+  }
+
+  lists.forEach(function (x) {
+    const sh = x.sheet, meta = x.meta;
+    const res = validateList_(sh.getRange(LIST.firstRow, 1, LIST.maxRows, meta.tieCol).getValues(), meta, cfg);
+
+    // Czyszczenie starych podświetleń (waga + próby) i nowe podświetlenia.
+    sh.getRange(LIST.firstRow, LIST.weightCol, LIST.maxRows, 1).setBackground(null);
+    meta.comps.forEach(function (c) {
+      sh.getRange(LIST.firstRow, c.col, LIST.maxRows, meta.layout === 2 ? 2 * c.attempts : c.attempts).setBackground(null);
+    });
+    res.cells.forEach(function (rc) { sh.getRange(rc[0], rc[1]).setBackground(BAD); });
+
+    res.errors.forEach(function (m) { errors.push(meta.category + ': ' + m); });
+    categoryResult_(cfg, sh, meta).unresolved.forEach(function (u) {
+      warnings.push(meta.category + ': nierozstrzygnięty remis na miejscu ' + u.place + ' (' + u.names.join(', ') + ') - uzupełnij dogrywkę');
+    });
+  });
+
+  if (!errors.length && !warnings.length) {
+    ui.alert('Walidacja zawodów', '✅ Wszystko poprawne - brak błędów.', ui.ButtonSet.OK);
+    return;
+  }
+  const MAX = 30;
+  const lines = [];
+  if (errors.length) {
+    lines.push('❌ Błędy (' + errors.length + '):');
+    errors.slice(0, MAX).forEach(function (m) { lines.push('• ' + m); });
+    if (errors.length > MAX) lines.push('… i ' + (errors.length - MAX) + ' więcej (podświetlone na czerwono na listach).');
+  }
+  if (warnings.length) {
+    if (lines.length) lines.push('');
+    lines.push('⚠ Remisy na podium (' + warnings.length + '):');
+    warnings.forEach(function (m) { lines.push('• ' + m); });
+  }
+  ui.alert('Walidacja zawodów', lines.join('\n'), ui.ButtonSet.OK);
+}
+
+/** Czysta walidacja wierszy listy. Zwraca { errors: [tekst], cells: [[wiersz, kolumna]] }. */
+function validateList_(values, meta, cfg) {
+  const errors = [], cells = [];
+  values.forEach(function (r, k) {
+    const first = String(r[1]).trim();
+    const last = String(r[2]).trim();
+    if (!first && !last) return;
+    const row = LIST.firstRow + k;
+    const who = 'nr ' + r[0] + ' ' + (first + ' ' + last).trim();
+
+    if (toNum_(r[LIST.weightCol - 1]) === null) {
+      errors.push(who + ' - brak wagi');
+      cells.push([row, LIST.weightCol]);
+    }
+    meta.comps.forEach(function (c) {
+      const live = cfg && cfg.competitions ? cfg.competitions.filter(function (q) { return q.key === c.key; })[0] : null;
+      const short = (live || c).short;
+      let prev = null, prevNo = 0;
+      readAttempts_(r, c, meta).forEach(function (a, i) {
+        if (a.kg === null) {
+          errors.push(who + ' - ' + short + ': brak próby ' + (i + 1));
+          cells.push([row, a.col]);
+          return;
+        }
+        if (prev !== null && a.kg < prev) {
+          errors.push(who + ' - ' + short + ': próba ' + (i + 1) + ' (' + a.kg + ' kg) lżejsza niż próba ' + prevNo + ' (' + prev + ' kg)');
+          cells.push([row, a.col]);
+        }
+        prev = a.kg;
+        prevNo = i + 1;
+      });
+    });
+  });
+  return { errors: errors, cells: cells };
 }
 
 /**
