@@ -1,6 +1,6 @@
 /**
  * Wydruk wyników do PDF: wszystkie kategorie w jednym pliku, każda od nowej strony.
- * Korzysta z escapeHtml_() i downloadDialogHtml_() z Regulamin.js.
+ * Korzysta z escapeHtml_() i deliverPdf_() z Regulamin.js.
  */
 
 function printResults() {
@@ -44,9 +44,7 @@ function printResults() {
 
   const html = resultsHtml_(title, sections, cfg.decimals, stamp);
   const pdf = Utilities.newBlob(html, 'text/html', 'wyniki.html').getAs('application/pdf').setName(fileName);
-  const dialog = HtmlService.createHtmlOutput(downloadDialogHtml_(Utilities.base64Encode(pdf.getBytes()), fileName))
-    .setWidth(420).setHeight(170);
-  ui.showModalDialog(dialog, '🖨️ Wyniki (PDF)');
+  deliverPdf_(pdf, '🖨️ Wyniki (PDF)');
 }
 
 /** Lista zawodników do PDF: każda kategoria od nowej strony (Nr, Imię, Nazwisko, Waga). */
@@ -84,9 +82,7 @@ function printAthletes() {
   const stamp = Utilities.formatDate(new Date(), 'Europe/Warsaw', 'dd.MM.yyyy HH:mm');
   const pdf = Utilities.newBlob(athletesHtml_(title, sections, stamp), 'text/html', 'lista.html')
     .getAs('application/pdf').setName(fileName);
-  const dialog = HtmlService.createHtmlOutput(downloadDialogHtml_(Utilities.base64Encode(pdf.getBytes()), fileName))
-    .setWidth(420).setHeight(170);
-  SpreadsheetApp.getUi().showModalDialog(dialog, '🖨️ Lista zawodników (PDF)');
+  deliverPdf_(pdf, '🖨️ Lista zawodników (PDF)');
 }
 
 function athletesHtml_(title, sections, stamp) {
