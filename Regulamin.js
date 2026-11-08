@@ -250,7 +250,7 @@ function rulesHtml_(paragraphs) {
 function downloadDialogHtml_(b64, fileName) {
   const name = escapeHtml_(fileName);
   return '<div style="font-family:Arial,sans-serif;font-size:14px">' +
-    '<p>Regulamin gotowy: <b>' + name + '</b></p>' +
+    '<p>Gotowe: <b>' + name + '</b></p>' +
     '<p><a id="dl" download="' + name + '" href="data:application/pdf;base64,' + b64 + '" ' +
     'style="display:inline-block;padding:8px 16px;background:#1f4e79;color:#fff;border-radius:4px;text-decoration:none">⬇️ Pobierz PDF</a></p>' +
     '</div>' +
