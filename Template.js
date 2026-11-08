@@ -105,6 +105,7 @@ const VALIDATION_RULES = [
   { key: 'LIMIT_TOTAL', label: 'Limit zawodników łącznie', value: 40 },
   { key: 'LIMIT_ADULT', label: 'Limit zawodników dorosłych', value: 30 },
   { key: 'LIMIT_JUNIOR', label: 'Limit juniorów (kategorie z zaznaczonym „Junior”)', value: 10 },
+  { key: 'LOCKED', label: 'Dane zawodników zgodne ze stanem z blokady (kolejność, waga, usunięci, dodani)' },
 ];
 
 const DEFAULT_DECIMALS = 3;
@@ -121,6 +122,7 @@ function buildMenus_() {
     .addToUi();
   buildZawodyMenu_(ui);
   ui.createMenu('🖨️ Druk')
+    .addItem('Generuj regulamin', 'generateRules')
     .addItem('Drukuj regulamin (PDF)', 'printRules')
     .addItem('Drukuj listę zawodników (PDF)', 'printAthletes')
     .addItem('Drukuj wyniki (PDF)', 'printResults')
@@ -131,9 +133,8 @@ function setupTemplate() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   if (!ss.getSheetByName(SHEET_CONFIG)) buildConfigSheet_(ss);
-  else ensureConfigAutoRow_(ss.getSheetByName(SHEET_CONFIG)); // dopisanie nowych ustawień do istniejącej konfiguracji
+  else upgradeConfigSheet_(ss.getSheetByName(SHEET_CONFIG)); // dopisanie nowych ustawień do istniejącej konfiguracji
   if (!ss.getSheetByName(SHEET_RESULTS)) createResultsSheet_(ss);
-  if (!ss.getSheetByName(SHEET_RULES)) buildRulesSheet_(ss);
   rebuildResults();
 
   // Domyślna pusta zakładka nowego arkusza - usuwana tylko, gdy naprawdę pusta.
@@ -261,6 +262,33 @@ function buildConfigSheet_(ss) {
   sh.setColumnWidth(1, 300);
   for (let c = 2; c <= Math.max(nCols, nRefCols, CFG.compShortCol); c++) sh.setColumnWidth(c, 130);
   return sh;
+}
+
+/** Dopisuje do istniejącej konfiguracji ustawienia dodane w nowszych wersjach (bez ruszania wpisanych danych). */
+function upgradeConfigSheet_(sh) {
+  ensureConfigAutoRow_(sh);
+  ensureValidationRows_(sh);
+}
+
+/** Brakujące wiersze tabeli walidacji (np. nowa reguła) - dopisywane na końcu tabeli, notatka przesuwana niżej. */
+function ensureValidationRows_(sh) {
+  const n = VALIDATION_RULES.length;
+  const labels = sh.getRange(CFG.valFirstRow, 1, n + 1, 1).getValues();
+  if (!String(sh.getRange(CFG.valHeaderRow, 1).getValue()).trim()) return; // stara konfiguracja bez tabeli walidacji
+  VALIDATION_RULES.forEach(function (rule, i) {
+    const text = String(labels[i][0]).trim();
+    if (text && text.indexOf('Sprawdzane przez') !== 0) return;
+    const row = CFG.valFirstRow + i;
+    sh.getRange(row, 1).setValue(rule.label).setFontStyle('normal').setFontColor('#000000').setWrap(true);
+    sh.getRange(row, 2).insertCheckboxes().setValue(true).setHorizontalAlignment('center');
+    sh.getRange(row, 3).setValue(rule.value === undefined ? '' : rule.value).setHorizontalAlignment('center')
+      .setBackground(rule.value === undefined ? '#f3f3f3' : null);
+  });
+  sh.getRange(CFG.valHeaderRow, 1, n + 1, 3)
+    .setBorder(true, true, true, true, true, true, '#c0c7d4', SpreadsheetApp.BorderStyle.SOLID);
+  sh.getRange(CFG.valFirstRow + n, 1)
+    .setValue('Sprawdzane przez 🏋️ Zawody → ✅ Walidacja zawodów oraz przed drukiem wyników.')
+    .setFontColor('#666666').setFontStyle('italic');
 }
 
 /** Wiersz „Przeliczaj wyniki automatycznie” (A7:B7) - dopisywany, jeśli go brak (bez ruszania reszty). */

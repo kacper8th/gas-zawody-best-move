@@ -70,6 +70,15 @@ function printAthletes() {
   });
   if (!sections.length) throw new Error('Brak zawodników na listach startowych - nie ma czego drukować.');
 
+  const lockIssues = collectLockIssues_(ss);
+  if (lockIssues.length) {
+    const ui = SpreadsheetApp.getUi();
+    const ans = ui.alert('Drukuj listę zawodników',
+      'Dane zawodników różnią się od stanu z blokady:\n\n• ' + lockIssues.slice(0, 30).join('\n• ') +
+      '\n\nMożesz je przywrócić: 🏋️ Zawody → Przywróć dane zawodników z blokady.\n\nDrukować mimo to?', ui.ButtonSet.YES_NO);
+    if (ans !== ui.Button.YES) return;
+  }
+
   const title = cfg.title || 'Lista zawodników';
   const fileName = ('Lista zawodników - ' + title).replace(/[\\/:*?"<>|]/g, '-').slice(0, 120) + '.pdf';
   const stamp = Utilities.formatDate(new Date(), 'Europe/Warsaw', 'dd.MM.yyyy HH:mm');

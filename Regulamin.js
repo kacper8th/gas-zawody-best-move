@@ -168,12 +168,26 @@ function buildRulesSheet_(ss) {
   return sh;
 }
 
+/** 🖨️ Druk → Generuj regulamin: zakłada zakładkę z domyślną treścią (istniejącej nie nadpisuje). */
+function generateRules() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  const existing = ss.getSheetByName(SHEET_RULES);
+  if (existing) {
+    ui.alert('Generuj regulamin', 'Zakładka „' + SHEET_RULES + '” już istnieje - aby utworzyć nową, najpierw usuń starą.', ui.ButtonSet.OK);
+    ss.setActiveSheet(existing);
+    return;
+  }
+  ss.setActiveSheet(buildRulesSheet_(ss));
+  ss.toast('Regulamin utworzony. Wydruk: 🖨️ Druk → Drukuj regulamin (PDF).', '🖨️ Druk', 8);
+}
+
 // ───────────────────────── PDF ─────────────────────────
 
 function printRules() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName(SHEET_RULES);
-  if (!sh) throw new Error('Brak zakładki „' + SHEET_RULES + '” - uruchom ⚙️ Setup → Zbuduj szablon.');
+  if (!sh) throw new Error('Brak zakładki „' + SHEET_RULES + '” - uruchom 🖨️ Druk → Generuj regulamin.');
 
   const last = sh.getLastRow();
   const rows = last >= RULES.firstRow ? sh.getRange(RULES.firstRow, 1, last - RULES.firstRow + 1, 2).getValues() : [];

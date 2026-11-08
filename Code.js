@@ -28,6 +28,7 @@ function buildZawodyMenu_(ui) {
     .addSeparator()
     .addItem(st.config ? '🔓 Odblokuj konfigurację' : '🔒 Zablokuj konfigurację', 'toggleConfigLock')
     .addItem(st.athletes ? '🔓 Odblokuj dane zawodników' : '🔒 Zablokuj dane zawodników', 'toggleAthletesLock')
+    .addItem('Przywróć dane zawodników z blokady', 'restoreAthletesFromLock')
     .addToUi();
 }
 
@@ -248,8 +249,12 @@ function onEdit(e) {
     }
     return;
   }
-  if (isList && st.athletes && restoreFromSnapshot_(sh, athletesSnapKey_(sh), e.range)) {
-    sh.getParent().toast('Dane zawodników są zablokowane - zmiana cofnięta.', '🔒 Blokada');
+  if (isList && st.athletes) {
+    const r = revertAthletesEdit_(sh, e);
+    if (r === 'reverted') sh.getParent().toast('Dane zawodników są zablokowane - zmiana cofnięta.', '🔒 Blokada');
+    if (r === 'skipped') {
+      sh.getParent().toast('Kolejność listy różni się od stanu z blokady - zmiany nie cofnięto. Użyj 🏋️ Zawody → Przywróć dane zawodników z blokady.', '🔒 Blokada', 10);
+    }
   }
 
   // Ręczna zmiana w kolumnie Nr - przywróć automatyczną numerację.
@@ -552,6 +557,11 @@ function collectValidation_(ss, cfg) {
   });
 
   limitIssues_(counts, opt).forEach(function (m) { errors.push(m); });
+  if (on('LOCKED')) {
+    collectLockIssues_(ss).forEach(function (m) {
+      errors.push(m + ' - 🏋️ Zawody → Przywróć dane zawodników z blokady');
+    });
+  }
   return { lists: lists, errors: errors, warnings: warnings, cells: cells };
 }
 
