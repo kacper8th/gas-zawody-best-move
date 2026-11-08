@@ -200,7 +200,10 @@ function printRules() {
 
   const html = rulesHtml_(paragraphs);
   const pdf = Utilities.newBlob(html, 'text/html', 'regulamin.html').getAs('application/pdf').setName(fileName);
-  deliverPdf_(pdf, '🖨️ Regulamin (PDF)');
+  const b64 = Utilities.base64Encode(pdf.getBytes());
+
+  const dialog = HtmlService.createHtmlOutput(downloadDialogHtml_(b64, fileName)).setWidth(420).setHeight(170);
+  SpreadsheetApp.getUi().showModalDialog(dialog, '🖨️ Regulamin (PDF)');
 }
 
 function escapeHtml_(s) {
@@ -243,35 +246,13 @@ function rulesHtml_(paragraphs) {
   return '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' + css + '</style></head><body>' + body + '</body></html>';
 }
 
-const PDF_FOLDER = 'Wydruki PDF';
-
-/**
- * Wydanie PDF: zapis na Dysku Google (folder „Wydruki PDF” obok arkusza) + okienko z linkiem „Otwórz”
- * i przyciskiem „Pobierz”. Link z Dysku działa w każdej przeglądarce, pobieranie z okienka nie wszędzie.
- */
-function deliverPdf_(pdf, dialogTitle) {
-  const file = pdfFolder_().createFile(pdf);
-  const html = pdfDialogHtml_(Utilities.base64Encode(pdf.getBytes()), pdf.getName(), file.getUrl());
-  SpreadsheetApp.getUi().showModalDialog(HtmlService.createHtmlOutput(html).setWidth(460).setHeight(210), dialogTitle);
-}
-
-/** Folder „Wydruki PDF” w folderze arkusza (zakładany, jeśli brak). */
-function pdfFolder_() {
-  const ssFile = DriveApp.getFileById(SpreadsheetApp.getActiveSpreadsheet().getId());
-  const parents = ssFile.getParents();
-  const parent = parents.hasNext() ? parents.next() : DriveApp.getRootFolder();
-  const existing = parent.getFoldersByName(PDF_FOLDER);
-  return existing.hasNext() ? existing.next() : parent.createFolder(PDF_FOLDER);
-}
-
-/** Okienko: link do pliku na Dysku + pobranie bezpośrednie. */
-function pdfDialogHtml_(b64, fileName, driveUrl) {
+/** Okienko z automatycznym pobraniem PDF (i przyciskiem na wypadek blokady). */
+function downloadDialogHtml_(b64, fileName) {
   const name = escapeHtml_(fileName);
-  const btn = 'display:inline-block;padding:8px 16px;border-radius:4px;text-decoration:none;margin-right:8px;';
   return '<div style="font-family:Arial,sans-serif;font-size:14px">' +
-    '<p>Gotowe: <b>' + name + '</b></p>' +
-    '<p>Zapisano na Dysku Google w folderze „' + PDF_FOLDER + '” obok arkusza.</p>' +
-    '<p><a href="' + escapeHtml_(driveUrl) + '" target="_blank" style="' + btn + 'background:#1f4e79;color:#fff">📄 Otwórz PDF</a>' +
-    '<a download="' + name + '" href="data:application/pdf;base64,' + b64 + '" style="' + btn + 'border:1px solid #1f4e79;color:#1f4e79">⬇️ Pobierz</a></p>' +
-    '</div>';
+    '<p>Regulamin gotowy: <b>' + name + '</b></p>' +
+    '<p><a id="dl" download="' + name + '" href="data:application/pdf;base64,' + b64 + '" ' +
+    'style="display:inline-block;padding:8px 16px;background:#1f4e79;color:#fff;border-radius:4px;text-decoration:none">⬇️ Pobierz PDF</a></p>' +
+    '</div>' +
+    '<script>try { document.getElementById("dl").click(); } catch (e) {}</script>';
 }
