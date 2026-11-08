@@ -440,7 +440,7 @@ function validateCompetition() {
     const res = validateList_(sh.getRange(LIST.firstRow, 1, LIST.maxRows, meta.tieCol).getValues(), meta, cfg);
 
     // Czyszczenie starych podświetleń (waga + próby) i nowe podświetlenia.
-    sh.getRange(LIST.firstRow, LIST.weightCol, LIST.maxRows, 1).setBackground(null);
+    sh.getRange(LIST.firstRow, 2, LIST.maxRows, LIST.fixedCols - 1).setBackground(null);
     meta.comps.forEach(function (c) {
       sh.getRange(LIST.firstRow, c.col, LIST.maxRows, meta.layout === 2 ? 2 * c.attempts : c.attempts).setBackground(null);
     });
@@ -474,12 +474,22 @@ function validateCompetition() {
 /** Czysta walidacja wierszy listy. Zwraca { errors: [tekst], cells: [[wiersz, kolumna]] }. */
 function validateList_(values, meta, cfg) {
   const errors = [], cells = [];
+  const seen = {}; // imię + nazwisko -> pierwszy wiersz
   values.forEach(function (r, k) {
     const first = String(r[1]).trim();
     const last = String(r[2]).trim();
     if (!first && !last) return;
     const row = LIST.firstRow + k;
     const who = 'nr ' + r[0] + ' ' + (first + ' ' + last).trim();
+
+    // Ten sam zawodnik (imię + nazwisko) dwa razy w kategorii.
+    const key = (first + ' ' + last).toLowerCase().replace(/\s+/g, ' ').trim();
+    if (seen[key]) {
+      errors.push(who + ' - powtórzony zawodnik (taki sam jak nr ' + seen[key].nr + ')');
+      cells.push([row, 2], [row, 3], [seen[key].row, 2], [seen[key].row, 3]);
+    } else {
+      seen[key] = { nr: r[0], row: row };
+    }
 
     if (toNum_(r[LIST.weightCol - 1]) === null) {
       errors.push(who + ' - brak wagi');
